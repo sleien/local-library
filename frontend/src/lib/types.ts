@@ -177,6 +177,25 @@ export interface Invite {
   accepted_at: string | null;
 }
 
+export interface Share {
+  id: number;
+  viewer_user_id: number;
+  viewer_name: string;
+  viewer_email: string;
+}
+
+export interface ApiToken {
+  id: number;
+  name: string;
+  prefix: string;
+  last_used_at: string | null;
+  created_at: string;
+}
+
+export interface TokenCreated extends ApiToken {
+  token: string;
+}
+
 export interface BulkAddItem {
   isbn: string;
   status: string;

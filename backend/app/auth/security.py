@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -46,6 +48,19 @@ def create_refresh_token(user_id: int) -> str:
     return _create_token(
         str(user_id), "refresh", timedelta(days=settings.refresh_token_ttl_days)
     )
+
+
+API_TOKEN_PREFIX = "blk_"
+
+
+def generate_api_token() -> tuple[str, str]:
+    """Return (plaintext_token, display_prefix). The plaintext is shown once."""
+    token = API_TOKEN_PREFIX + secrets.token_urlsafe(32)
+    return token, token[:12]
+
+
+def hash_api_token(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()
 
 
 def decode_token(token: str, expected_type: str) -> int | None:

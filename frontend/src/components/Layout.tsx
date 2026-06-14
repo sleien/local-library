@@ -29,10 +29,17 @@ const nav = [
 // Items surfaced in the mobile bottom bar (the rest live behind the header).
 const mobileNav = nav.filter((n) => ["/", "/add", "/scan", "/people", "/loans"].includes(n.to));
 
+// Routes that mutate the collection; hidden for read-only (viewer) households.
+const WRITE_ROUTES = ["/add", "/scan"];
+
 export function Layout({ children }: { children: ReactNode }) {
   const { me, household, setHouseholdId, logout } = useAuth();
   const { theme, toggle } = useTheme();
   const navigate = useNavigate();
+
+  const canWrite = household?.role !== "viewer";
+  const sideNav = canWrite ? nav : nav.filter((n) => !WRITE_ROUTES.includes(n.to));
+  const bottomNav = canWrite ? mobileNav : mobileNav.filter((n) => !WRITE_ROUTES.includes(n.to));
 
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
@@ -43,7 +50,7 @@ export function Layout({ children }: { children: ReactNode }) {
           Bibliothek
         </div>
         <nav className="flex-1 space-y-1 px-3">
-          {nav.map((item) => (
+          {sideNav.map((item) => (
             <SideLink key={item.to} {...item} />
           ))}
           <SideLink to="/settings" label="Settings" icon={Settings} end={false} />
@@ -60,6 +67,7 @@ export function Layout({ children }: { children: ReactNode }) {
                 value={household?.id ?? ""}
                 onChange={(e) => setHouseholdId(Number(e.target.value))}
                 className="h-9 max-w-[10rem] rounded-md border border-input bg-background px-2 text-sm"
+                data-tour="household"
               >
                 {me.households.map((h) => (
                   <option key={h.id} value={h.id}>
@@ -68,7 +76,13 @@ export function Layout({ children }: { children: ReactNode }) {
                 ))}
               </select>
             )}
-            <Button variant="ghost" size="icon" onClick={toggle} aria-label="Toggle theme">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggle}
+              aria-label="Toggle theme"
+              data-tour="theme"
+            >
               {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
             </Button>
             <Button
@@ -97,7 +111,7 @@ export function Layout({ children }: { children: ReactNode }) {
 
       {/* Mobile bottom navigation */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 flex border-t bg-card safe-bottom md:hidden">
-        {mobileNav.map((item) => (
+        {bottomNav.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}

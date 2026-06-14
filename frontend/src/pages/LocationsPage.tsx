@@ -27,6 +27,7 @@ function flatten(nodes: LocationNode[], depth = 0): { id: number; label: string 
 export function LocationsPage() {
   const { household } = useAuth();
   const hid = household?.id;
+  const canWrite = household?.role !== "viewer";
   const qc = useQueryClient();
   const toast = useToast();
   const [edit, setEdit] = useState<EditState | null>(null);
@@ -81,9 +82,11 @@ export function LocationsPage() {
             Build your own hierarchy, e.g. Office Shelf 1 / Section 3 / Left.
           </p>
         </div>
-        <Button onClick={() => setEdit({ parent_id: null, name: "", kind: "room" })}>
-          <FolderPlus className="h-4 w-4" /> Add
-        </Button>
+        {canWrite && (
+          <Button onClick={() => setEdit({ parent_id: null, name: "", kind: "room" })}>
+            <FolderPlus className="h-4 w-4" /> Add
+          </Button>
+        )}
       </div>
 
       {isLoading ? (
@@ -98,6 +101,7 @@ export function LocationsPage() {
                 key={node.id}
                 node={node}
                 depth={0}
+                canWrite={canWrite}
                 onAddChild={(parentId) =>
                   setEdit({ parent_id: parentId, name: "", kind: "section" })
                 }
@@ -177,12 +181,14 @@ export function LocationsPage() {
 function TreeRow({
   node,
   depth,
+  canWrite,
   onAddChild,
   onEdit,
   onDelete,
 }: {
   node: LocationNode;
   depth: number;
+  canWrite: boolean;
   onAddChild: (parentId: number) => void;
   onEdit: (n: LocationNode) => void;
   onDelete: (id: number) => void;
@@ -200,23 +206,26 @@ function TreeRow({
         <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
           {node.kind}
         </span>
-        <div className="flex opacity-0 transition-opacity group-hover:opacity-100">
-          <Button variant="ghost" size="icon" onClick={() => onAddChild(node.id)} aria-label="Add child">
-            <Plus className="h-3.5 w-3.5" />
-          </Button>
-          <Button variant="ghost" size="icon" onClick={() => onEdit(node)} aria-label="Edit">
-            <Pencil className="h-3.5 w-3.5" />
-          </Button>
-          <Button variant="ghost" size="icon" onClick={() => onDelete(node.id)} aria-label="Delete">
-            <Trash2 className="h-3.5 w-3.5 text-destructive" />
-          </Button>
-        </div>
+        {canWrite && (
+          <div className="flex opacity-0 transition-opacity group-hover:opacity-100">
+            <Button variant="ghost" size="icon" onClick={() => onAddChild(node.id)} aria-label="Add child">
+              <Plus className="h-3.5 w-3.5" />
+            </Button>
+            <Button variant="ghost" size="icon" onClick={() => onEdit(node)} aria-label="Edit">
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+            <Button variant="ghost" size="icon" onClick={() => onDelete(node.id)} aria-label="Delete">
+              <Trash2 className="h-3.5 w-3.5 text-destructive" />
+            </Button>
+          </div>
+        )}
       </li>
       {node.children.map((c) => (
         <TreeRow
           key={c.id}
           node={c}
           depth={depth + 1}
+          canWrite={canWrite}
           onAddChild={onAddChild}
           onEdit={onEdit}
           onDelete={onDelete}

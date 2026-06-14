@@ -1,6 +1,23 @@
 """End-to-end API tests covering the core library and borrowing flows."""
 
+import httpx
+from httpx import ASGITransport
+
+from app.main import app
 from app.schemas.book import LookupResult
+
+
+def fresh_client() -> httpx.AsyncClient:
+    return httpx.AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
+
+
+async def register(c: httpx.AsyncClient, email: str, name: str = "User") -> int:
+    r = await c.post(
+        "/api/auth/register",
+        json={"email": email, "password": "password123", "display_name": name},
+    )
+    assert r.status_code == 200, r.text
+    return r.json()["households"][0]["id"]
 
 
 def sample_lookup(isbn13="9780134685991", title="Effective Java"):
@@ -199,3 +216,75 @@ async def test_bulk_add(auth_client, monkeypatch):
     # Both books are now searchable in that location.
     res = (await auth_client.get(f"/api/search?location_id={loc['id']}")).json()
     assert len(res) == 2
+
+
+async def test_friend_sharing(client):
+    # User A owns a household with a book.
+    hid_a = await register(client, "a@s.com", "A")
+    book = (
+        await client.post(
+            f"/api/households/{hid_a}/books/from-lookup",
+            json={"isbn": "9780134685991", "lookup": sample_lookup()},
+        )
+    ).json()
+
+    async with fresh_client() as b:
+        await register(b, "b@s.com", "B")
+        # Before sharing, B cannot see A's household at all.
+        assert (await b.get(f"/api/households/{hid_a}/books")).status_code == 404
+
+        # A shares read-only with B.
+        share = await client.post(f"/api/households/{hid_a}/shares", json={"email": "b@s.com"})
+        assert share.status_code == 201
+
+        # B can now read and search A's collection.
+        assert (await b.get(f"/api/households/{hid_a}/books")).status_code == 200
+        res = (await b.get(f"/api/search?household_id={hid_a}")).json()
+        assert len(res) == 1
+        me = (await b.get("/api/auth/me")).json()
+        assert any(h["id"] == hid_a and h["role"] == "viewer" for h in me["households"])
+
+        # But B cannot modify it: no new copies, no comments.
+        assert (
+            await b.post(f"/api/households/{hid_a}/books/{book['id']}/copies", json={})
+        ).status_code == 404
+        assert (
+            await b.post(
+                f"/api/households/{hid_a}/books/{book['id']}/comments", json={"body": "hi"}
+            )
+        ).status_code == 404
+
+        # Revoking removes B's access.
+        sid = (await client.get(f"/api/households/{hid_a}/shares")).json()[0]["id"]
+        assert (await client.delete(f"/api/households/{hid_a}/shares/{sid}")).status_code == 204
+        assert (await b.get(f"/api/households/{hid_a}/books")).status_code == 404
+
+
+async def test_share_requires_existing_user(auth_client):
+    hid = auth_client.household_id
+    r = await auth_client.post(f"/api/households/{hid}/shares", json={"email": "ghost@s.com"})
+    assert r.status_code == 404
+
+
+async def test_api_tokens(auth_client):
+    created = await auth_client.post("/api/tokens", json={"name": "cli"})
+    assert created.status_code == 201
+    token = created.json()["token"]
+    assert token.startswith("blk_")
+
+    # The token authenticates a cookie-less client via Bearer.
+    async with fresh_client() as nc:
+        me = await nc.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
+        assert me.status_code == 200
+        assert me.json()["user"]["email"] == "owner@example.com"
+
+    # Listing never leaks the plaintext.
+    listing = (await auth_client.get("/api/tokens")).json()
+    assert listing[0]["prefix"] and "token" not in listing[0]
+
+    # Revoked tokens stop working.
+    tid = listing[0]["id"]
+    assert (await auth_client.delete(f"/api/tokens/{tid}")).status_code == 204
+    async with fresh_client() as nc:
+        bad = await nc.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
+        assert bad.status_code == 401

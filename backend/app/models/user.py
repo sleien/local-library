@@ -55,6 +55,42 @@ class HouseholdMembership(Base, TimestampMixin):
     household: Mapped[Household] = relationship(back_populates="memberships")
 
 
+class HouseholdShare(Base, TimestampMixin):
+    """Grants a user read-only access to another household's collection."""
+
+    __tablename__ = "household_share"
+    __table_args__ = (
+        UniqueConstraint("household_id", "viewer_user_id", name="uq_household_share"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    household_id: Mapped[int] = mapped_column(
+        ForeignKey("household.id", ondelete="CASCADE"), index=True
+    )
+    viewer_user_id: Mapped[int] = mapped_column(
+        ForeignKey("user.id", ondelete="CASCADE"), index=True
+    )
+
+    household: Mapped[Household] = relationship()
+    viewer: Mapped[User] = relationship()
+
+
+class ApiToken(Base, TimestampMixin):
+    """A personal access token for programmatic API use. Only the hash is stored."""
+
+    __tablename__ = "api_token"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("user.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    # SHA-256 of the token, indexed for lookup; the plaintext is shown once.
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    prefix: Mapped[str] = mapped_column(String(16), nullable=False)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    user: Mapped[User] = relationship()
+
+
 class HouseholdInvite(Base, TimestampMixin):
     __tablename__ = "household_invite"
 

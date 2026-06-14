@@ -30,8 +30,12 @@ The name is German for "library".
   location, read status, and availability.
 - Multiple users per household with full shared read and write access (for example, you and
   your partner). Invite others with a link.
+- Share a library read-only with friends in other households: they can browse and search your
+  books but cannot change anything.
+- An interactive onboarding tour for new users, with a skip button.
 - Responsive interface for mobile and desktop, with light and dark themes.
-- A complete REST API with interactive documentation at `/api/docs`.
+- A complete REST API with interactive documentation at `/api/docs`, plus personal API tokens
+  for scripts and integrations.
 
 ## Screenshots
 
@@ -112,26 +116,31 @@ A household owns a collection. Everyone in a household has full read and write a
   register straight into the household (handy for a partner).
 - A user can belong to several households and switch between them from the header.
 
-Read-only sharing with friends across households is on the roadmap (see below).
+You can also share a library read-only with a friend: in Settings, enter the email of another
+registered user under "Read-only sharing". They can then browse and search your collection from
+their own account (it appears in their library switcher) but cannot add, edit, move, or lend
+anything. Revoke access at any time.
 
 ## Using the API
 
 The backend is the same REST API the web interface uses. Interactive documentation is served
-at `/api/docs` and the OpenAPI schema at `/api/openapi.json`. Authentication is cookie based,
-so a scripted client signs in and reuses the cookie:
+at `/api/docs` and the OpenAPI schema at `/api/openapi.json`.
+
+For scripts and integrations, create a personal API token in Settings under "API access" and send
+it as a bearer token:
 
 ```sh
-# Sign in and store the session cookie.
-curl -s -c cookies.txt -X POST http://localhost:8000/api/auth/login \
-  -H 'Content-Type: application/json' \
-  -d '{"email":"you@example.com","password":"your-password"}'
-
-# List books in household 1.
-curl -s -b cookies.txt http://localhost:8000/api/households/1/books
+# List books in household 1 using a personal API token.
+curl -s -H "Authorization: Bearer blk_your_token_here" \
+  http://localhost:8000/api/households/1/books
 
 # Look up an ISBN.
-curl -s -b cookies.txt http://localhost:8000/api/lookup/isbn/9780134685991
+curl -s -H "Authorization: Bearer blk_your_token_here" \
+  http://localhost:8000/api/lookup/isbn/9780134685991
 ```
+
+The browser interface authenticates with a session cookie instead, so you can also drive the API
+by signing in (`POST /api/auth/login`) and reusing the cookie.
 
 ## Development
 
@@ -206,12 +215,12 @@ Implemented:
   search and filters, reading status, ratings, comments.
 - Borrowing: people, loans, history, borrower feedback, book and person views, mass add.
 - Local accounts and optional Authentik single sign-on, households and invites.
-
-Planned:
-
 - Read-only sharing of a collection with friends in other households.
 - Personal API tokens for programmatic access without a browser session.
 - An interactive onboarding tour with a skip option.
+
+Planned:
+
 - An isometric shelf map: upload a drawing of your shelves and highlight where a book sits.
 
 ## Contributing

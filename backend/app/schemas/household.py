@@ -48,3 +48,14 @@ class InvitePreview(BaseModel):
     household_name: str
     role: str
     valid: bool
+
+
+class ShareCreate(BaseModel):
+    email: EmailStr
+
+
+class ShareOut(BaseModel):
+    id: int
+    viewer_user_id: int
+    viewer_name: str
+    viewer_email: str

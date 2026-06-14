@@ -12,6 +12,7 @@ export function PersonDetailPage() {
   const { id } = useParams();
   const { household } = useAuth();
   const hid = household?.id;
+  const canWrite = household?.role !== "viewer";
   const navigate = useNavigate();
   const qc = useQueryClient();
   const toast = useToast();
@@ -54,14 +55,16 @@ export function PersonDetailPage() {
               {person.notes && <p className="text-foreground">{person.notes}</p>}
             </div>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Delete person"
-            onClick={() => confirm(`Delete ${person.name}?`) && deleteMut.mutate()}
-          >
-            <Trash2 className="h-4 w-4 text-destructive" />
-          </Button>
+          {canWrite && (
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Delete person"
+              onClick={() => confirm(`Delete ${person.name}?`) && deleteMut.mutate()}
+            >
+              <Trash2 className="h-4 w-4 text-destructive" />
+            </Button>
+          )}
         </div>
       </Card>
 

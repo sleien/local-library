@@ -14,6 +14,7 @@ from app.api import (
     people,
     search,
     tags,
+    tokens,
 )
 
 api_router = APIRouter(prefix="/api")
@@ -28,3 +29,4 @@ api_router.include_router(people.router)
 api_router.include_router(loans.router)
 api_router.include_router(search.router)
 api_router.include_router(assets.router)
+api_router.include_router(tokens.router)

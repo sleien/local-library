@@ -333,7 +333,7 @@ async def add_comment(
     user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> CommentOut:
-    await require_household_access(session, user, household_id)
+    await require_member(session, user, household_id)
     book = await session.scalar(
         select(Book).where(Book.id == book_id, Book.household_id == household_id)
     )

@@ -14,7 +14,7 @@ from app.auth.deps import get_current_user
 from app.auth.security import REFRESH_TOKEN_COOKIE, decode_token, hash_password, verify_password
 from app.config import settings
 from app.db import get_session
-from app.models import Household, HouseholdInvite, HouseholdMembership, User
+from app.models import Household, HouseholdInvite, HouseholdMembership, HouseholdShare, User
 from app.schemas.auth import (
     AuthConfigOut,
     HouseholdSummary,
@@ -37,6 +37,16 @@ async def build_me(session: AsyncSession, user: User) -> MeOut:
     households = [
         HouseholdSummary(id=hid, name=name, role=role) for hid, name, role in rows.all()
     ]
+    # Read-only libraries shared with this user appear as the "viewer" role.
+    shared = await session.execute(
+        select(Household.id, Household.name)
+        .join(HouseholdShare, HouseholdShare.household_id == Household.id)
+        .where(HouseholdShare.viewer_user_id == user.id)
+        .order_by(Household.id)
+    )
+    households.extend(
+        HouseholdSummary(id=hid, name=name, role="viewer") for hid, name in shared.all()
+    )
     return MeOut(user=UserOut.model_validate(user), households=households)
 
 

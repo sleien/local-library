@@ -21,6 +21,7 @@ const empty: Draft = { name: "", email: "", phone: "", notes: "" };
 export function PeoplePage() {
   const { household } = useAuth();
   const hid = household?.id;
+  const canWrite = household?.role !== "viewer";
   const qc = useQueryClient();
   const toast = useToast();
   const [draft, setDraft] = useState<Draft | null>(null);
@@ -50,9 +51,11 @@ export function PeoplePage() {
     <div className="mx-auto max-w-2xl space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">People</h1>
-        <Button onClick={() => setDraft({ ...empty })}>
-          <UserPlus className="h-4 w-4" /> Add person
-        </Button>
+        {canWrite && (
+          <Button onClick={() => setDraft({ ...empty })}>
+            <UserPlus className="h-4 w-4" /> Add person
+          </Button>
+        )}
       </div>
 
       {isLoading ? (

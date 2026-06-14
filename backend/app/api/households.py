@@ -11,7 +11,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.deps import get_current_user, require_member
 from app.db import get_session
-from app.models import Household, HouseholdInvite, HouseholdMembership, User
+from app.models import (
+    Household,
+    HouseholdInvite,
+    HouseholdMembership,
+    HouseholdShare,
+    User,
+)
 from app.schemas.household import (
     HouseholdCreate,
     HouseholdOut,
@@ -20,6 +26,8 @@ from app.schemas.household import (
     InviteOut,
     InvitePreview,
     MemberOut,
+    ShareCreate,
+    ShareOut,
 )
 
 router = APIRouter(tags=["households"])
@@ -143,6 +151,82 @@ async def revoke_invite(
     if invite is None or invite.household_id != household_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Invite not found")
     await session.delete(invite)
+    await session.commit()
+
+
+@router.get("/households/{household_id}/shares", response_model=list[ShareOut])
+async def list_shares(
+    household_id: int,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> list[ShareOut]:
+    await require_member(session, user, household_id)
+    rows = await session.execute(
+        select(HouseholdShare.id, User.id, User.display_name, User.email)
+        .join(User, User.id == HouseholdShare.viewer_user_id)
+        .where(HouseholdShare.household_id == household_id)
+        .order_by(User.display_name)
+    )
+    return [
+        ShareOut(id=sid, viewer_user_id=uid, viewer_name=name, viewer_email=email)
+        for sid, uid, name, email in rows.all()
+    ]
+
+
+@router.post("/households/{household_id}/shares", response_model=ShareOut, status_code=201)
+async def create_share(
+    household_id: int,
+    payload: ShareCreate,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> ShareOut:
+    """Grant a registered user read-only access to this household's collection."""
+    await require_member(session, user, household_id, require_owner=True)
+    target = await session.scalar(select(User).where(User.email == payload.email.lower()))
+    if target is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, "No user with that email; they must register first"
+        )
+    member = await session.scalar(
+        select(HouseholdMembership).where(
+            HouseholdMembership.household_id == household_id,
+            HouseholdMembership.user_id == target.id,
+        )
+    )
+    if member is not None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "That user is already a member")
+    existing = await session.scalar(
+        select(HouseholdShare).where(
+            HouseholdShare.household_id == household_id,
+            HouseholdShare.viewer_user_id == target.id,
+        )
+    )
+    if existing is not None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Already shared with that user")
+    share = HouseholdShare(household_id=household_id, viewer_user_id=target.id)
+    session.add(share)
+    await session.commit()
+    await session.refresh(share)
+    return ShareOut(
+        id=share.id,
+        viewer_user_id=target.id,
+        viewer_name=target.display_name,
+        viewer_email=target.email,
+    )
+
+
+@router.delete("/households/{household_id}/shares/{share_id}", status_code=204)
+async def revoke_share(
+    household_id: int,
+    share_id: int,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> None:
+    await require_member(session, user, household_id, require_owner=True)
+    share = await session.get(HouseholdShare, share_id)
+    if share is None or share.household_id != household_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Share not found")
+    await session.delete(share)
     await session.commit()
 
 

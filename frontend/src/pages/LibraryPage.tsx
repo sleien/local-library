@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Filter, PlusCircle, Search, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/auth/AuthContext";
+import { hasSeenTour, startTour } from "@/onboarding/tour";
 import type { BookSummary, LocationNode, Tag } from "@/lib/types";
 import { BookCard } from "@/components/BookCard";
 import { Badge, Button, buttonClass, EmptyState, Input, PageSpinner, Select } from "@/components/ui";
@@ -24,6 +25,13 @@ export function LibraryPage() {
   const [locationId, setLocationId] = useState("");
   const [activeTags, setActiveTags] = useState<number[]>([]);
   const [showFilters, setShowFilters] = useState(false);
+
+  // Run the onboarding tour once for new users.
+  useEffect(() => {
+    if (hasSeenTour()) return;
+    const t = setTimeout(() => startTour(), 600);
+    return () => clearTimeout(t);
+  }, []);
 
   const { data: tags } = useQuery({
     queryKey: ["tags", hid],
@@ -62,18 +70,28 @@ export function LibraryPage() {
     setActiveTags((prev) => (prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]));
 
   const hasFilters = status || borrowed || locationId || activeTags.length > 0;
+  const canWrite = household?.role !== "viewer";
 
   return (
     <div className="space-y-4" data-tour="library">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Library</h1>
-        <Link to="/add" className={buttonClass("default", "md", "hidden md:inline-flex")}>
-          <PlusCircle className="h-4 w-4" /> Add book
-        </Link>
+        <div className="flex items-center gap-2">
+          <h1 className="text-2xl font-semibold">Library</h1>
+          {!canWrite && (
+            <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+              Read-only
+            </span>
+          )}
+        </div>
+        {canWrite && (
+          <Link to="/add" className={buttonClass("default", "md", "hidden md:inline-flex")}>
+            <PlusCircle className="h-4 w-4" /> Add book
+          </Link>
+        )}
       </div>
 
       <div className="flex gap-2">
-        <div className="relative flex-1">
+        <div className="relative flex-1" data-tour="search">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={q}
@@ -87,6 +105,7 @@ export function LibraryPage() {
           size="icon"
           onClick={() => setShowFilters((s) => !s)}
           aria-label="Filters"
+          data-tour="filter"
         >
           <Filter className="h-4 w-4" />
         </Button>

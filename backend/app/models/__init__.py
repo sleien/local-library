@@ -12,9 +12,18 @@ from app.models.book import (
 )
 from app.models.loan import Loan, LoanFeedback, Person
 from app.models.location import Location
-from app.models.user import Household, HouseholdInvite, HouseholdMembership, User
+from app.models.user import (
+    ApiToken,
+    Household,
+    HouseholdInvite,
+    HouseholdMembership,
+    HouseholdShare,
+    User,
+)
 
 __all__ = [
+    "ApiToken",
+    "HouseholdShare",
     "Asset",
     "Book",
     "BookTag",

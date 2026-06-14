@@ -41,6 +41,7 @@ export function BookDetailPage() {
   const { id } = useParams();
   const { household } = useAuth();
   const hid = household?.id;
+  const canWrite = household?.role !== "viewer";
   const navigate = useNavigate();
   const qc = useQueryClient();
   const toast = useToast();
@@ -229,7 +230,7 @@ export function BookDetailPage() {
               </div>
             )}
           </div>
-          {book.covers.length > 1 && (
+          {canWrite && book.covers.length > 1 && (
             <Button variant="outline" size="sm" className="mt-2 w-full" onClick={() => setCoverOpen(true)}>
               <Images className="h-3.5 w-3.5" /> Change cover
             </Button>
@@ -261,13 +262,17 @@ export function BookDetailPage() {
                 "Set reading status"
               )}
             </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => confirm("Delete this book and all its copies?") && deleteBook.mutate()}
-            >
-              <Trash2 className="h-3.5 w-3.5 text-destructive" /> Delete
-            </Button>
+            {canWrite && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() =>
+                  confirm("Delete this book and all its copies?") && deleteBook.mutate()
+                }
+              >
+                <Trash2 className="h-3.5 w-3.5 text-destructive" /> Delete
+              </Button>
+            )}
           </div>
 
           {book.description && (
@@ -282,26 +287,34 @@ export function BookDetailPage() {
               {book.tags.map((t) => (
                 <Badge key={t.id} color={t.color}>
                   {t.name}
-                  <button className="ml-1" onClick={() => tagRemove.mutate(t.id)} aria-label="Remove tag">
-                    <X className="h-3 w-3" />
-                  </button>
+                  {canWrite && (
+                    <button
+                      className="ml-1"
+                      onClick={() => tagRemove.mutate(t.id)}
+                      aria-label="Remove tag"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
                 </Badge>
               ))}
             </div>
-            <div className="mt-2 flex max-w-xs gap-2">
-              <Input
-                value={tagInput}
-                onChange={(e) => setTagInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && tagInput.trim()) {
-                    tagAdd.mutate(tagInput.trim());
-                    setTagInput("");
-                  }
-                }}
-                placeholder="Add tag"
-                className="h-8"
-              />
-            </div>
+            {canWrite && (
+              <div className="mt-2 flex max-w-xs gap-2">
+                <Input
+                  value={tagInput}
+                  onChange={(e) => setTagInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && tagInput.trim()) {
+                      tagAdd.mutate(tagInput.trim());
+                      setTagInput("");
+                    }
+                  }}
+                  placeholder="Add tag"
+                  className="h-8"
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -310,9 +323,11 @@ export function BookDetailPage() {
       <section>
         <div className="mb-2 flex items-center justify-between">
           <h2 className="font-semibold">Copies ({book.copies.length})</h2>
-          <Button size="sm" variant="outline" onClick={() => setAddCopyOpen(true)}>
-            <Plus className="h-3.5 w-3.5" /> Add copy
-          </Button>
+          {canWrite && (
+            <Button size="sm" variant="outline" onClick={() => setAddCopyOpen(true)}>
+              <Plus className="h-3.5 w-3.5" /> Add copy
+            </Button>
+          )}
         </div>
         <div className="space-y-2">
           {book.copies.map((copy) => {
@@ -322,63 +337,68 @@ export function BookDetailPage() {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2 text-sm">
                     <MapPin className="h-4 w-4 text-muted-foreground" />
-                    <Select
-                      value={copy.location_id ?? ""}
-                      onChange={(e) =>
-                        moveCopy.mutate({
-                          copyId: copy.id,
-                          locationId: e.target.value ? Number(e.target.value) : null,
-                        })
-                      }
-                      className="h-8 w-auto min-w-[12rem]"
-                    >
-                      <option value="">Unassigned</option>
-                      {locationOptions.map((o) => (
-                        <option key={o.id} value={o.id}>
-                          {o.label}
-                        </option>
-                      ))}
-                    </Select>
+                    {canWrite ? (
+                      <Select
+                        value={copy.location_id ?? ""}
+                        onChange={(e) =>
+                          moveCopy.mutate({
+                            copyId: copy.id,
+                            locationId: e.target.value ? Number(e.target.value) : null,
+                          })
+                        }
+                        className="h-8 w-auto min-w-[12rem]"
+                      >
+                        <option value="">Unassigned</option>
+                        {locationOptions.map((o) => (
+                          <option key={o.id} value={o.id}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </Select>
+                    ) : (
+                      <span>{copy.location_path ?? "Unassigned"}</span>
+                    )}
                     {copy.condition && (
                       <span className="text-xs text-muted-foreground">({copy.condition})</span>
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    {copy.is_borrowed ? (
-                      <>
-                        <span className="text-xs text-muted-foreground">
-                          With {copy.borrowed_by}
-                        </span>
-                        {loan && (
+                    {copy.is_borrowed && (
+                      <span className="text-xs text-muted-foreground">With {copy.borrowed_by}</span>
+                    )}
+                    {canWrite &&
+                      (copy.is_borrowed ? (
+                        loan && (
                           <Button size="sm" variant="outline" onClick={() => returnLoan.mutate(loan.id)}>
                             <Undo2 className="h-3.5 w-3.5" /> Return
                           </Button>
-                        )}
-                      </>
-                    ) : (
+                        )
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="subtle"
+                          onClick={() => {
+                            if (!people || people.length === 0) {
+                              toast.push("Add a person first", "info");
+                              navigate("/people");
+                              return;
+                            }
+                            setLendCopy(copy);
+                          }}
+                        >
+                          <HandHelping className="h-3.5 w-3.5" /> Lend
+                        </Button>
+                      ))}
+                    {canWrite && (
                       <Button
                         size="sm"
-                        variant="subtle"
-                        onClick={() => {
-                          if (!people || people.length === 0) {
-                            toast.push("Add a person first", "info");
-                            navigate("/people");
-                            return;
-                          }
-                          setLendCopy(copy);
-                        }}
+                        variant="ghost"
+                        aria-label="Delete copy"
+                        onClick={() => confirm("Delete this copy?") && deleteCopy.mutate(copy.id)}
                       >
-                        <HandHelping className="h-3.5 w-3.5" /> Lend
+                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
                       </Button>
                     )}
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      aria-label="Delete copy"
-                      onClick={() => confirm("Delete this copy?") && deleteCopy.mutate(copy.id)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                    </Button>
                   </div>
                 </div>
               </Card>
@@ -397,30 +417,37 @@ export function BookDetailPage() {
                 <p className="text-sm font-medium">{c.user_name}</p>
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-muted-foreground">{formatDate(c.created_at)}</span>
-                  <button
-                    onClick={() => deleteComment.mutate(c.id)}
-                    className="text-muted-foreground hover:text-destructive"
-                    aria-label="Delete comment"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
+                  {canWrite && (
+                    <button
+                      onClick={() => deleteComment.mutate(c.id)}
+                      className="text-muted-foreground hover:text-destructive"
+                      aria-label="Delete comment"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
               </div>
               <p className="mt-1 whitespace-pre-line text-sm">{c.body}</p>
             </Card>
           ))}
         </div>
-        <div className="mt-2 flex gap-2">
-          <Input
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && comment.trim() && addComment.mutate()}
-            placeholder="Write a comment..."
-          />
-          <Button onClick={() => comment.trim() && addComment.mutate()} loading={addComment.isPending}>
-            Post
-          </Button>
-        </div>
+        {canWrite && (
+          <div className="mt-2 flex gap-2">
+            <Input
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && comment.trim() && addComment.mutate()}
+              placeholder="Write a comment..."
+            />
+            <Button
+              onClick={() => comment.trim() && addComment.mutate()}
+              loading={addComment.isPending}
+            >
+              Post
+            </Button>
+          </div>
+        )}
       </section>
 
       {/* Reading status modal */}

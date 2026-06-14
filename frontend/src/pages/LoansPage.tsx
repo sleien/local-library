@@ -21,6 +21,7 @@ import type { Loan } from "@/lib/types";
 export function LoansPage() {
   const { household } = useAuth();
   const hid = household?.id;
+  const canWrite = household?.role !== "viewer";
   const qc = useQueryClient();
   const toast = useToast();
   const [filter, setFilter] = useState<"active" | "all">("active");
@@ -120,17 +121,19 @@ export function LoansPage() {
                 {loan.returned_at ? ` → ${formatDate(loan.returned_at)} (returned)` : " · on loan"}
                 {loan.due_date && !loan.returned_at ? ` · due ${formatDate(loan.due_date)}` : ""}
               </p>
-              <div className="mt-2 flex gap-2">
-                {loan.is_active && (
-                  <Button size="sm" variant="outline" onClick={() => returnMut.mutate(loan.id)}>
-                    <Undo2 className="h-3.5 w-3.5" /> Return
+              {canWrite && (
+                <div className="mt-2 flex gap-2">
+                  {loan.is_active && (
+                    <Button size="sm" variant="outline" onClick={() => returnMut.mutate(loan.id)}>
+                      <Undo2 className="h-3.5 w-3.5" /> Return
+                    </Button>
+                  )}
+                  <Button size="sm" variant="ghost" onClick={() => openFeedback(loan)}>
+                    <MessageSquare className="h-3.5 w-3.5" />
+                    {loan.feedback ? "Edit feedback" : "Add feedback"}
                   </Button>
-                )}
-                <Button size="sm" variant="ghost" onClick={() => openFeedback(loan)}>
-                  <MessageSquare className="h-3.5 w-3.5" />
-                  {loan.feedback ? "Edit feedback" : "Add feedback"}
-                </Button>
-              </div>
+                </div>
+              )}
             </Card>
           ))}
         </div>
