@@ -97,8 +97,10 @@ export function AddBookPage() {
             value={isbn}
             onChange={(e) => setIsbn(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && doLookup(isbn)}
-            placeholder="978..."
+            placeholder="978... (or point a handheld scanner here)"
             inputMode="numeric"
+            autoComplete="off"
+            autoFocus
           />
           <Button variant="outline" onClick={() => doLookup(isbn)} loading={looking}>
             <Search className="h-4 w-4" /> Look up

@@ -1,11 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { CheckCircle2, ScanLine, Trash2, XCircle } from "lucide-react";
+import { Camera, CheckCircle2, Plus, ScanLine, Trash2, XCircle } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { useAuth } from "@/auth/AuthContext";
 import { useToast } from "@/components/Toast";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
-import { Button, Card, EmptyState, Label, Select } from "@/components/ui";
+import { Button, Card, Input, Label, Select } from "@/components/ui";
 import type { BulkAddResult, LocationNode } from "@/lib/types";
 
 function flatten(nodes: LocationNode[], depth = 0): { id: number; label: string }[] {
@@ -20,10 +20,12 @@ export function MassAddPage() {
   const hid = household?.id;
   const toast = useToast();
   const [locationId, setLocationId] = useState("");
-  const [scanning, setScanning] = useState(false);
+  const [camera, setCamera] = useState(false);
+  const [entry, setEntry] = useState("");
   const [codes, setCodes] = useState<string[]>([]);
   const [result, setResult] = useState<BulkAddResult | null>(null);
   const [busy, setBusy] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const { data: locations } = useQuery({
     queryKey: ["locations", hid],
@@ -33,12 +35,22 @@ export function MassAddPage() {
   const locationOptions = useMemo(() => (locations ? flatten(locations) : []), [locations]);
   const locationLabel = locationOptions.find((o) => String(o.id) === locationId)?.label.trim();
 
-  const onDetected = (code: string) => {
-    setCodes((prev) => {
-      if (prev.includes(code)) return prev;
-      toast.push(`Scanned ${code}`, "info");
-      return [...prev, code];
-    });
+  // Append a scanned code. Duplicates are allowed so the same title can be
+  // added as several copies.
+  const addCode = (raw: string) => {
+    const code = raw.trim();
+    if (!code) return;
+    setCodes((prev) => [...prev, code]);
+    toast.push(`Added ${code}`, "info");
+  };
+
+  const onEntryKey = (e: React.KeyboardEvent) => {
+    // A handheld (keyboard-wedge) scanner types the digits then sends Enter.
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addCode(entry);
+      setEntry("");
+    }
   };
 
   const commit = async () => {
@@ -52,8 +64,8 @@ export function MassAddPage() {
       });
       setResult(res);
       setCodes([]);
-      setScanning(false);
       toast.push(`Added ${res.added} book${res.added === 1 ? "" : "s"}`, "success");
+      inputRef.current?.focus();
     } catch (err) {
       toast.push(err instanceof ApiError ? err.message : "Bulk add failed", "error");
     } finally {
@@ -61,12 +73,18 @@ export function MassAddPage() {
     }
   };
 
+  // Keep the scan field focused so a handheld scanner just works.
+  useEffect(() => {
+    if (!camera) inputRef.current?.focus();
+  }, [camera]);
+
   return (
     <div className="mx-auto max-w-2xl space-y-4">
       <div>
         <h1 className="text-2xl font-semibold">Mass add</h1>
         <p className="text-sm text-muted-foreground">
-          Pick a location, then scan as many barcodes as you like. They are all added at once.
+          Pick a location, then scan a stack of barcodes (handheld scanner or phone camera) and
+          add them all at once.
         </p>
       </div>
 
@@ -83,34 +101,65 @@ export function MassAddPage() {
           </Select>
         </div>
 
+        <div>
+          <Label>Scan or type a barcode</Label>
+          <div className="flex gap-2">
+            <Input
+              ref={inputRef}
+              value={entry}
+              onChange={(e) => setEntry(e.target.value)}
+              onKeyDown={onEntryKey}
+              placeholder="Point a handheld scanner here, or type an ISBN and press Enter"
+              inputMode="numeric"
+              autoFocus
+              autoComplete="off"
+            />
+            <Button
+              variant="outline"
+              size="icon"
+              aria-label="Add barcode"
+              onClick={() => {
+                addCode(entry);
+                setEntry("");
+                inputRef.current?.focus();
+              }}
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            A USB/Bluetooth scanner that types like a keyboard works here — each scan adds a row.
+          </p>
+        </div>
+
         <Button
-          variant={scanning ? "destructive" : "default"}
+          variant={camera ? "destructive" : "subtle"}
           className="w-full"
-          onClick={() => setScanning((s) => !s)}
+          onClick={() => setCamera((c) => !c)}
         >
-          <ScanLine className="h-4 w-4" />
-          {scanning ? "Stop scanning" : "Start scanning"}
+          {camera ? <ScanLine className="h-4 w-4" /> : <Camera className="h-4 w-4" />}
+          {camera ? "Stop camera" : "Use phone camera instead"}
         </Button>
 
-        {scanning && <BarcodeScanner onDetected={onDetected} continuous />}
+        {camera && <BarcodeScanner onDetected={addCode} continuous />}
       </Card>
 
       {codes.length > 0 && (
         <Card className="p-4">
           <div className="mb-2 flex items-center justify-between">
             <p className="font-medium">
-              {codes.length} scanned{locationLabel ? ` → ${locationLabel}` : ""}
+              {codes.length} to add{locationLabel ? ` → ${locationLabel}` : ""}
             </p>
             <Button variant="ghost" size="sm" onClick={() => setCodes([])}>
               Clear
             </Button>
           </div>
           <ul className="divide-y rounded-md border">
-            {codes.map((c) => (
-              <li key={c} className="flex items-center justify-between px-3 py-2 text-sm">
+            {codes.map((c, i) => (
+              <li key={i} className="flex items-center justify-between px-3 py-2 text-sm">
                 <span className="font-mono">{c}</span>
                 <button
-                  onClick={() => setCodes(codes.filter((x) => x !== c))}
+                  onClick={() => setCodes(codes.filter((_, idx) => idx !== i))}
                   className="text-muted-foreground hover:text-destructive"
                   aria-label="Remove"
                 >
@@ -146,10 +195,6 @@ export function MassAddPage() {
             ))}
           </ul>
         </Card>
-      )}
-
-      {codes.length === 0 && !result && !scanning && (
-        <EmptyState title="Nothing scanned yet" hint="Start scanning to build a batch." />
       )}
     </div>
   );
