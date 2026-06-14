@@ -43,6 +43,18 @@ class Settings(BaseSettings):
         return f"{self.public_url.rstrip('/')}/api/auth/oidc/callback"
 
     @property
+    def oidc_metadata_url(self) -> str | None:
+        """OIDC discovery URL. Accepts either the issuer or the full
+        .well-known/openid-configuration URL in OIDC_ISSUER."""
+        if not self.oidc_issuer:
+            return None
+        base = self.oidc_issuer.rstrip("/")
+        suffix = "/.well-known/openid-configuration"
+        if base.endswith(suffix.lstrip("/")):
+            return base
+        return f"{base}{suffix}"
+
+    @property
     def is_postgres(self) -> bool:
         return self.database_url.startswith("postgresql")
 

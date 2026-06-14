@@ -22,7 +22,7 @@ def get_oauth() -> OAuth:
             name="authentik",
             client_id=settings.oidc_client_id,
             client_secret=settings.oidc_client_secret,
-            server_metadata_url=f"{settings.oidc_issuer.rstrip('/')}/.well-known/openid-configuration",
+            server_metadata_url=settings.oidc_metadata_url,
             client_kwargs={"scope": settings.oidc_scopes},
         )
         _oauth = oauth
