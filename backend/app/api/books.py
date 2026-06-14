@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.auth.deps import get_current_user, require_household_access, require_member
 from app.db import get_session
-from app.models import Book, Comment, Loan, Tag, User, UserBook
+from app.models import Book, Comment, CoverCandidate, Loan, Tag, User, UserBook
 from app.schemas.book import (
     BookDetail,
     BookFromLookup,
@@ -31,7 +31,7 @@ from app.services.books import (
     get_or_create_tags,
     set_book_tags,
 )
-from app.services.covers import download_cover
+from app.services.covers import MAX_UPLOAD_BYTES, download_cover, store_image
 from app.services.locations import build_path, get_location_map
 from app.services.metadata import lookup_isbn, normalize_isbn
 
@@ -250,6 +250,39 @@ async def select_cover(
         asset = await download_cover(session, household_id, cover.source_url)
         if asset is not None:
             cover.asset_id = asset.id
+    book.selected_cover_id = cover.id
+    await session.commit()
+    book = await _load_book(session, household_id, book_id)
+    return await _build_detail(session, book, user.id)
+
+
+@router.post("/{book_id}/cover", response_model=BookDetail)
+async def upload_cover(
+    household_id: int,
+    book_id: int,
+    file: UploadFile = File(...),
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> BookDetail:
+    """Upload a custom cover image, store it, and make it the selected cover."""
+    await require_member(session, user, household_id)
+    # Validate without eager-loading covers: the post-commit reload must see the
+    # new cover (the session keeps objects after commit, so a stale empty covers
+    # collection would otherwise persist).
+    book = await session.scalar(
+        select(Book).where(Book.id == book_id, Book.household_id == household_id)
+    )
+    if book is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Book not found")
+    content = await file.read()
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Image too large (max 12 MB)")
+    asset = await store_image(session, household_id, content, file.content_type or "")
+    if asset is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Please upload a valid image file")
+    cover = CoverCandidate(book_id=book.id, source="upload", asset_id=asset.id)
+    session.add(cover)
+    await session.flush()
     book.selected_cover_id = cover.id
     await session.commit()
     book = await _load_book(session, household_id, book_id)

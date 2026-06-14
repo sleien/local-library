@@ -12,7 +12,7 @@ The name is German for "library".
 
 - Add books by ISBN or by scanning a barcode with your device camera. Metadata and cover
   images are pulled automatically from Open Library and Google Books.
-- When several cover images are found, you choose the correct one.
+- When several cover images are found, you choose the correct one — or upload your own.
 - Track multiple physical copies of the same title. Each copy has its own location and its
   own borrowing history, so the same book can sit on two shelves or be lent out while another
   copy stays home.

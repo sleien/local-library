@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import {
@@ -10,6 +10,7 @@ import {
   Plus,
   Trash2,
   Undo2,
+  Upload,
   X,
 } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
@@ -130,6 +131,25 @@ export function BookDetailPage() {
     },
     onError,
   });
+  const coverFileRef = useRef<HTMLInputElement>(null);
+  const uploadCover = useMutation({
+    mutationFn: (f: File) => {
+      const form = new FormData();
+      form.append("file", f);
+      return api.upload(`/api/households/${hid}/books/${id}/cover`, form);
+    },
+    onSuccess: () => {
+      refresh();
+      setCoverOpen(false);
+      toast.push("Cover updated", "success");
+    },
+    onError,
+  });
+  const onPickCover = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (f) uploadCover.mutate(f);
+    e.target.value = ""; // let the same file be re-selected later
+  };
 
   // --- local modal state ---
   const [tagInput, setTagInput] = useState("");
@@ -230,10 +250,35 @@ export function BookDetailPage() {
               </div>
             )}
           </div>
-          {canWrite && book.covers.length > 1 && (
-            <Button variant="outline" size="sm" className="mt-2 w-full" onClick={() => setCoverOpen(true)}>
-              <Images className="h-3.5 w-3.5" /> Change cover
-            </Button>
+          {canWrite && (
+            <div className="mt-2 space-y-2">
+              {book.covers.length > 1 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => setCoverOpen(true)}
+                >
+                  <Images className="h-3.5 w-3.5" /> Change cover
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => coverFileRef.current?.click()}
+                loading={uploadCover.isPending}
+              >
+                <Upload className="h-3.5 w-3.5" /> Upload cover
+              </Button>
+              <input
+                ref={coverFileRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={onPickCover}
+              />
+            </div>
           )}
         </div>
 
@@ -562,6 +607,16 @@ export function BookDetailPage() {
 
       {/* Cover picker modal */}
       <Modal open={coverOpen} onClose={() => setCoverOpen(false)} title="Choose a cover" wide>
+        <div className="mb-3">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => coverFileRef.current?.click()}
+            loading={uploadCover.isPending}
+          >
+            <Upload className="h-3.5 w-3.5" /> Upload your own
+          </Button>
+        </div>
         <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
           {book.covers.map((c) => (
             <button

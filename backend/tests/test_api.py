@@ -326,3 +326,34 @@ async def test_rename_household(auth_client):
     assert r.status_code == 200 and r.json()["name"] == "Renamed Library"
     households = (await auth_client.get("/api/households")).json()
     assert any(h["id"] == hid and h["name"] == "Renamed Library" for h in households)
+
+
+async def test_upload_cover(auth_client):
+    hid = auth_client.household_id
+    book = (
+        await auth_client.post(
+            f"/api/households/{hid}/books/manual", json={"title": "No Cover Book"}
+        )
+    ).json()
+    assert book["cover_url"] is None
+
+    img = b"\x89PNG\r\n\x1a\n" + b"0" * 400  # dummy bytes; > 256 and image/png
+    r = await auth_client.post(
+        f"/api/households/{hid}/books/{book['id']}/cover",
+        files={"file": ("cover.png", img, "image/png")},
+    )
+    assert r.status_code == 200, r.text
+    detail = r.json()
+    assert detail["cover_url"] and detail["cover_url"].startswith("/api/assets/")
+    assert any(c["source"] == "upload" and c["selected"] for c in detail["covers"])
+
+    # The stored cover is served back.
+    asset_id = detail["cover_url"].rsplit("/", 1)[-1]
+    assert (await auth_client.get(f"/api/assets/{asset_id}")).status_code == 200
+
+    # Non-image uploads are rejected.
+    bad = await auth_client.post(
+        f"/api/households/{hid}/books/{book['id']}/cover",
+        files={"file": ("notes.txt", b"definitely not an image " * 20, "text/plain")},
+    )
+    assert bad.status_code == 400

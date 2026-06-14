@@ -33,10 +33,26 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return data as T;
 }
 
+async function upload<T>(path: string, form: FormData): Promise<T> {
+  // No explicit Content-Type: the browser sets the multipart boundary.
+  const res = await fetch(path, { method: "POST", credentials: "include", body: form });
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : undefined;
+  if (!res.ok) {
+    const detail =
+      data && typeof data === "object" && "detail" in data && typeof data.detail === "string"
+        ? data.detail
+        : res.statusText;
+    throw new ApiError(res.status, detail);
+  }
+  return data as T;
+}
+
 export const api = {
   get: <T>(path: string) => request<T>("GET", path),
   post: <T>(path: string, body?: unknown) => request<T>("POST", path, body),
   put: <T>(path: string, body?: unknown) => request<T>("PUT", path, body),
   patch: <T>(path: string, body?: unknown) => request<T>("PATCH", path, body),
   del: <T>(path: string) => request<T>("DELETE", path),
+  upload: <T>(path: string, form: FormData) => upload<T>(path, form),
 };

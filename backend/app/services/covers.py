@@ -21,23 +21,21 @@ _EXT_BY_TYPE = {
 }
 
 
+MAX_UPLOAD_BYTES = 12 * 1024 * 1024  # 12 MB
+
+
 def covers_dir() -> str:
     path = os.path.join(settings.data_dir, _COVERS_SUBDIR)
     os.makedirs(path, exist_ok=True)
     return path
 
 
-async def download_cover(session: AsyncSession, household_id: int, url: str) -> Asset | None:
-    """Fetch a cover image and persist it as an Asset. Returns None on failure."""
-    try:
-        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
-            resp = await client.get(url)
-            resp.raise_for_status()
-            content = resp.content
-            content_type = resp.headers.get("content-type", "image/jpeg").split(";")[0].strip()
-    except httpx.HTTPError:
-        return None
-    # Open Library returns a tiny 1x1 placeholder when no cover exists.
+async def store_image(
+    session: AsyncSession, household_id: int, content: bytes, content_type: str
+) -> Asset | None:
+    """Persist raw image bytes to the data volume as an Asset. Returns None if invalid."""
+    content_type = (content_type or "").split(";")[0].strip().lower()
+    # Reject empty/tiny content (e.g. Open Library's 1x1 placeholder) and non-images.
     if not content or len(content) < 256:
         return None
     if not content_type.startswith("image/"):
@@ -59,3 +57,16 @@ async def download_cover(session: AsyncSession, household_id: int, url: str) -> 
     session.add(asset)
     await session.flush()
     return asset
+
+
+async def download_cover(session: AsyncSession, household_id: int, url: str) -> Asset | None:
+    """Fetch a cover image from a URL and persist it as an Asset. None on failure."""
+    try:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+            content = resp.content
+            content_type = resp.headers.get("content-type", "image/jpeg")
+    except httpx.HTTPError:
+        return None
+    return await store_image(session, household_id, content, content_type)
