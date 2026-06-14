@@ -29,8 +29,8 @@ const sizes: Record<Size, string> = {
 // eslint-disable-next-line react-refresh/only-export-components
 export function buttonClass(variant: Variant = "default", size: Size = "md", className?: string) {
   return cn(
-    "inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors",
-    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+    "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md font-medium",
+    "transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
     "disabled:pointer-events-none disabled:opacity-50",
     variants[variant],
     sizes[size],
@@ -139,7 +139,8 @@ export function Badge({
     <span
       onClick={onClick}
       className={cn(
-        "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium",
+        "inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2.5 py-1",
+        "text-xs font-medium leading-none",
         onClick && "cursor-pointer hover:bg-accent",
         className,
       )}

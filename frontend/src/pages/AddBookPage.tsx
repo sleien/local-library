@@ -102,12 +102,13 @@ export function AddBookPage() {
             autoComplete="off"
             autoFocus
           />
-          <Button variant="outline" onClick={() => doLookup(isbn)} loading={looking}>
+          <Button variant="outline" className="shrink-0" onClick={() => doLookup(isbn)} loading={looking}>
             <Search className="h-4 w-4" /> Look up
           </Button>
           <Button
             variant={scanning ? "default" : "subtle"}
             size="icon"
+            className="h-10 w-10 shrink-0"
             onClick={() => setScanning((s) => !s)}
             aria-label="Scan barcode"
           >
@@ -221,7 +222,13 @@ export function AddBookPage() {
                 onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addTag())}
                 placeholder="Add a custom tag"
               />
-              <Button variant="outline" size="icon" onClick={addTag} aria-label="Add tag">
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-10 w-10 shrink-0"
+                onClick={addTag}
+                aria-label="Add tag"
+              >
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
@@ -232,8 +239,13 @@ export function AddBookPage() {
                 </Badge>
               ))}
               {extraTags.map((t) => (
-                <Badge key={t} className="bg-primary text-primary-foreground" onClick={() => setExtraTags(extraTags.filter((x) => x !== t))}>
-                  {t} <X className="ml-1 h-3 w-3" />
+                <Badge
+                  key={t}
+                  className="bg-primary text-primary-foreground"
+                  onClick={() => setExtraTags(extraTags.filter((x) => x !== t))}
+                >
+                  {t}
+                  <X className="h-3 w-3 opacity-80" />
                 </Badge>
               ))}
             </div>

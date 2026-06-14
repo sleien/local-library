@@ -117,6 +117,7 @@ export function MassAddPage() {
             <Button
               variant="outline"
               size="icon"
+              className="h-10 w-10 shrink-0"
               aria-label="Add barcode"
               onClick={() => {
                 addCode(entry);

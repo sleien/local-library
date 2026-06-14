@@ -109,6 +109,7 @@ export function LibraryPage() {
         <Button
           variant={hasFilters ? "default" : "outline"}
           size="icon"
+          className="h-10 w-10 shrink-0"
           onClick={() => setShowFilters((s) => !s)}
           aria-label="Filters"
           data-tour="filter"

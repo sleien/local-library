@@ -349,7 +349,7 @@ export function BookDetailPage() {
                   {t.name}
                   {canWrite && (
                     <button
-                      className="ml-1"
+                      className="-mr-0.5 opacity-60 hover:opacity-100"
                       onClick={() => tagRemove.mutate(t.id)}
                       aria-label="Remove tag"
                     >
