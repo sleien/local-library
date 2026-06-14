@@ -10,6 +10,12 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: "autoUpdate",
+      workbox: {
+        // Never serve the SPA shell for API routes. Browser navigations such as
+        // the OIDC login redirect and callback must reach the backend, not the
+        // service worker's navigation fallback.
+        navigateFallbackDenylist: [/^\/api\//],
+      },
       manifest: {
         name: "Bibliothek",
         short_name: "Bibliothek",
