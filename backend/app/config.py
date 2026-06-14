@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     # Public base URL of the deployment, used to build OIDC redirect URLs.
     public_url: str = "http://localhost:8000"
 
+    # Optional Google Books API key. Lifts the low anonymous quota (HTTP 429),
+    # improving metadata and cover coverage. Lookups work without it too.
+    google_books_api_key: str | None = None
+
     # Auth / cookies
     access_token_ttl_minutes: int = 30
     refresh_token_ttl_days: int = 30

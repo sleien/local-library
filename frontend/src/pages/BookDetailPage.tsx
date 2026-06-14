@@ -627,7 +627,12 @@ export function BookDetailPage() {
               }`}
             >
               {c.url ? (
-                <img src={c.url} alt="" className="aspect-[2/3] w-full object-cover" />
+                <img
+                  src={c.url}
+                  alt=""
+                  className="aspect-[2/3] w-full object-cover"
+                  onError={(e) => (e.currentTarget.style.visibility = "hidden")}
+                />
               ) : (
                 <div className="flex aspect-[2/3] items-center justify-center bg-muted">
                   <BookOpen className="h-6 w-6 text-muted-foreground" />

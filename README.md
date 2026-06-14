@@ -82,6 +82,7 @@ All configuration is through environment variables (read from `.env` by Compose)
 | `OIDC_CLIENT_ID` | | OIDC client id. |
 | `OIDC_CLIENT_SECRET` | | OIDC client secret. |
 | `OIDC_DISPLAY_NAME` | `Authentik` | Label shown on the single sign-on button. |
+| `GOOGLE_BOOKS_API_KEY` | | Optional Google Books API key; lifts the anonymous rate limit for richer metadata and covers. |
 
 Book covers and other uploads are stored on the `app-data` volume (mounted at `/data`).
 The database is stored on the `db-data` volume.

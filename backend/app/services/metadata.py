@@ -10,6 +10,7 @@ import re
 
 import httpx
 
+from app.config import settings
 from app.schemas.book import LookupCover, LookupResult
 
 _TIMEOUT = httpx.Timeout(10.0)
@@ -31,45 +32,81 @@ class OpenLibraryProvider(MetadataProvider):
     name = "openlibrary"
 
     async def lookup(self, client: httpx.AsyncClient, isbn: str) -> LookupResult | None:
-        url = "https://openlibrary.org/api/books"
-        params = {"bibkeys": f"ISBN:{isbn}", "format": "json", "jscmd": "data"}
-        try:
-            resp = await client.get(url, params=params)
-            resp.raise_for_status()
-            data = resp.json()
-        except (httpx.HTTPError, ValueError):
+        record = await self._fetch_data(client, isbn)
+        doc = await self._fetch_search(client, isbn)
+        if not record and not doc:
             return None
-        record = data.get(f"ISBN:{isbn}")
-        if not record:
-            return None
+        record = record or {}
 
         covers: list[LookupCover] = []
+        # A cover keyed by Open Library's internal id (from search) is a real
+        # image when present; the ISBN-keyed endpoint often returns a blank
+        # placeholder, so we no longer use it.
+        cover_i = (doc or {}).get("cover_i")
+        if cover_i:
+            covers.append(
+                LookupCover(source=self.name, url=f"https://covers.openlibrary.org/b/id/{cover_i}-L.jpg")
+            )
         cover_map = record.get("cover") or {}
-        for url_value in (cover_map.get("large"), cover_map.get("medium"), cover_map.get("small")):
+        for url_value in (cover_map.get("large"), cover_map.get("medium")):
             if url_value:
                 covers.append(LookupCover(source=self.name, url=url_value))
-        # Direct cover endpoint as an extra candidate.
-        covers.append(
-            LookupCover(source=self.name, url=f"https://covers.openlibrary.org/b/isbn/{isbn}-L.jpg")
-        )
 
         identifiers = record.get("identifiers") or {}
+        authors = [a.get("name") for a in record.get("authors", []) if a.get("name")]
+        if not authors and doc:
+            authors = doc.get("author_name", [])
+        publisher = ", ".join(
+            p.get("name") for p in record.get("publishers", []) if p.get("name")
+        ) or None
+        if not publisher and doc and doc.get("publisher"):
+            publisher = doc["publisher"][0]
+        published_date = record.get("publish_date")
+        if not published_date and doc and doc.get("first_publish_year"):
+            published_date = str(doc["first_publish_year"])
+
         return LookupResult(
-            title=record.get("title") or "Unknown title",
+            title=record.get("title") or (doc or {}).get("title") or "Unknown title",
             subtitle=record.get("subtitle"),
-            authors=[a.get("name") for a in record.get("authors", []) if a.get("name")],
+            authors=authors,
             isbn10=(identifiers.get("isbn_10") or [None])[0],
             isbn13=(identifiers.get("isbn_13") or [None])[0],
-            publisher=", ".join(
-                p.get("name") for p in record.get("publishers", []) if p.get("name")
-            )
-            or None,
-            published_date=record.get("publish_date"),
-            page_count=record.get("number_of_pages"),
+            publisher=publisher,
+            published_date=published_date,
+            page_count=record.get("number_of_pages")
+            or ((doc or {}).get("number_of_pages_median")),
             subjects=[s.get("name") for s in record.get("subjects", []) if s.get("name")][:12],
             covers=covers,
             sources=[self.name],
         )
+
+    async def _fetch_data(self, client: httpx.AsyncClient, isbn: str) -> dict | None:
+        try:
+            resp = await client.get(
+                "https://openlibrary.org/api/books",
+                params={"bibkeys": f"ISBN:{isbn}", "format": "json", "jscmd": "data"},
+            )
+            resp.raise_for_status()
+            return resp.json().get(f"ISBN:{isbn}")
+        except (httpx.HTTPError, ValueError):
+            return None
+
+    async def _fetch_search(self, client: httpx.AsyncClient, isbn: str) -> dict | None:
+        try:
+            resp = await client.get(
+                "https://openlibrary.org/search.json",
+                params={
+                    "isbn": isbn,
+                    "fields": "title,author_name,cover_i,first_publish_year,"
+                    "publisher,number_of_pages_median",
+                    "limit": 1,
+                },
+            )
+            resp.raise_for_status()
+            docs = resp.json().get("docs") or []
+            return docs[0] if docs else None
+        except (httpx.HTTPError, ValueError):
+            return None
 
 
 class GoogleBooksProvider(MetadataProvider):
@@ -77,8 +114,12 @@ class GoogleBooksProvider(MetadataProvider):
 
     async def lookup(self, client: httpx.AsyncClient, isbn: str) -> LookupResult | None:
         url = "https://www.googleapis.com/books/v1/volumes"
+        params = {"q": f"isbn:{isbn}", "country": "US"}
+        # An API key lifts the low anonymous quota that otherwise returns HTTP 429.
+        if settings.google_books_api_key:
+            params["key"] = settings.google_books_api_key
         try:
-            resp = await client.get(url, params={"q": f"isbn:{isbn}"})
+            resp = await client.get(url, params=params)
             resp.raise_for_status()
             data = resp.json()
         except (httpx.HTTPError, ValueError):

@@ -156,6 +156,7 @@ export function AddBookPage() {
                   src={result.covers[coverIndex].url}
                   alt=""
                   className="h-full w-full object-cover"
+                  onError={(e) => (e.currentTarget.style.visibility = "hidden")}
                 />
               ) : (
                 <div className="flex h-full items-center justify-center text-muted-foreground">
@@ -187,7 +188,12 @@ export function AddBookPage() {
                       i === coverIndex ? "border-primary" : "border-transparent"
                     }`}
                   >
-                    <img src={c.url} alt="" className="h-full w-full object-cover" />
+                    <img
+                      src={c.url}
+                      alt=""
+                      className="h-full w-full object-cover"
+                      onError={(e) => (e.currentTarget.style.visibility = "hidden")}
+                    />
                   </button>
                 ))}
               </div>

@@ -116,16 +116,23 @@ async def create_book_from_lookup(
         candidates.append(cc)
     await session.flush()
 
-    # Choose and download the selected cover.
+    # Choose and download a cover. Start at the requested index, but fall
+    # through to the other candidates so a missing/placeholder image does not
+    # leave the book without a usable cover.
     if candidates:
-        index = selected_cover_index if selected_cover_index is not None else 0
-        index = max(0, min(index, len(candidates) - 1))
-        chosen = candidates[index]
-        asset = None
-        if chosen.source_url:
-            asset = await download_cover(session, household_id, chosen.source_url)
-        if asset is not None:
-            chosen.asset_id = asset.id
+        start = selected_cover_index if selected_cover_index is not None else 0
+        start = max(0, min(start, len(candidates) - 1))
+        order = [start, *[i for i in range(len(candidates)) if i != start]]
+        chosen = candidates[start]
+        for i in order:
+            candidate = candidates[i]
+            if not candidate.source_url:
+                continue
+            asset = await download_cover(session, household_id, candidate.source_url)
+            if asset is not None:
+                candidate.asset_id = asset.id
+                chosen = candidate
+                break
         book.selected_cover_id = chosen.id
 
     # Tags: auto from subjects, plus any custom extras.
