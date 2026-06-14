@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { Filter, PlusCircle, Search, X } from "lucide-react";
+import { Filter, History, PlusCircle, Search, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/auth/AuthContext";
 import { hasSeenTour, startTour } from "@/onboarding/tour";
@@ -83,11 +83,17 @@ export function LibraryPage() {
             </span>
           )}
         </div>
-        {canWrite && (
-          <Link to="/add" className={buttonClass("default", "md", "hidden md:inline-flex")}>
-            <PlusCircle className="h-4 w-4" /> Add book
+        <div className="flex items-center gap-2">
+          <Link to="/timeline" className={buttonClass("outline", "md")} title="Reading timeline">
+            <History className="h-4 w-4" />
+            <span className="hidden sm:inline">Timeline</span>
           </Link>
-        )}
+          {canWrite && (
+            <Link to="/add" className={buttonClass("default", "md", "hidden md:inline-flex")}>
+              <PlusCircle className="h-4 w-4" /> Add book
+            </Link>
+          )}
+        </div>
       </div>
 
       <div className="flex gap-2">

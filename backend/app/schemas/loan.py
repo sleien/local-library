@@ -29,6 +29,7 @@ class PersonOut(ORMModel):
     email: str | None
     phone: str | None
     notes: str | None
+    user_id: int | None = None
     active_loan_count: int = 0
 
 
@@ -45,7 +46,10 @@ class FeedbackOut(ORMModel):
 
 class LoanCreate(BaseModel):
     copy_id: int
-    person_id: int
+    # Lend to an existing borrower, or to a registered user (a linked borrower is
+    # created automatically). Exactly one of these must be provided.
+    person_id: int | None = None
+    user_id: int | None = None
     lent_at: datetime | None = None
     due_date: datetime | None = None
     notes: str | None = None

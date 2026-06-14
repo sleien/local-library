@@ -4,6 +4,8 @@ import {
   BookMarked,
   Boxes,
   HandHelping,
+  History,
+  LibraryBig,
   Moon,
   PlusCircle,
   ScanLine,
@@ -21,9 +23,11 @@ const nav = [
   { to: "/", label: "Library", icon: BookMarked, end: true },
   { to: "/add", label: "Add", icon: PlusCircle, end: false },
   { to: "/scan", label: "Scan", icon: ScanLine, end: false },
+  { to: "/timeline", label: "Timeline", icon: History, end: false },
   { to: "/people", label: "People", icon: Users, end: false },
   { to: "/loans", label: "Loans", icon: HandHelping, end: false },
   { to: "/locations", label: "Locations", icon: Boxes, end: false },
+  { to: "/libraries", label: "Libraries", icon: LibraryBig, end: false },
 ];
 
 // Items surfaced in the mobile bottom bar (the rest live behind the header).

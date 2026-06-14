@@ -66,6 +66,39 @@ async def list_loans(
     return [_serialize(loan) for loan in loans.all()]
 
 
+async def _resolve_borrower(
+    session: AsyncSession, household_id: int, payload: LoanCreate
+) -> Person:
+    """Resolve the borrower from a person id, or a user id (get-or-create a link)."""
+    if (payload.person_id is None) == (payload.user_id is None):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "Provide exactly one of person_id or user_id"
+        )
+    if payload.person_id is not None:
+        person = await session.get(Person, payload.person_id)
+        if person is None or person.household_id != household_id:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Person not found")
+        return person
+    target = await session.get(User, payload.user_id)
+    if target is None or not target.is_active:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+    person = await session.scalar(
+        select(Person).where(
+            Person.household_id == household_id, Person.user_id == target.id
+        )
+    )
+    if person is None:
+        person = Person(
+            household_id=household_id,
+            user_id=target.id,
+            name=target.display_name,
+            email=target.email,
+        )
+        session.add(person)
+        await session.flush()
+    return person
+
+
 @router.post("/loans", response_model=LoanOut, status_code=201)
 async def lend(
     household_id: int,
@@ -78,9 +111,7 @@ async def lend(
     copy = await session.get(Copy, payload.copy_id)
     if copy is None or copy.household_id != household_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Copy not found")
-    person = await session.get(Person, payload.person_id)
-    if person is None or person.household_id != household_id:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Person not found")
+    person = await _resolve_borrower(session, household_id, payload)
 
     open_loan = await session.scalar(
         select(Loan).where(Loan.copy_id == copy.id, Loan.returned_at.is_(None))

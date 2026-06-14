@@ -136,7 +136,19 @@ export interface Person {
   email: string | null;
   phone: string | null;
   notes: string | null;
+  user_id: number | null;
   active_loan_count: number;
+}
+
+export interface ReadingLogEntry {
+  book_id: number;
+  title: string;
+  authors: string[];
+  cover_url: string | null;
+  rating: number | null;
+  started_at: string | null;
+  finished_at: string | null;
+  household_id: number | null;
 }
 
 export interface Feedback {

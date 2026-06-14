@@ -11,6 +11,8 @@ import { LocationsPage } from "./pages/LocationsPage";
 import { PeoplePage } from "./pages/PeoplePage";
 import { PersonDetailPage } from "./pages/PersonDetailPage";
 import { LoansPage } from "./pages/LoansPage";
+import { LibrariesPage } from "./pages/LibrariesPage";
+import { TimelinePage } from "./pages/TimelinePage";
 import { SettingsPage } from "./pages/SettingsPage";
 
 export function App() {
@@ -30,6 +32,8 @@ export function App() {
         <Route path="/people" element={<PeoplePage />} />
         <Route path="/people/:id" element={<PersonDetailPage />} />
         <Route path="/loans" element={<LoansPage />} />
+        <Route path="/libraries" element={<LibrariesPage />} />
+        <Route path="/timeline" element={<TimelinePage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

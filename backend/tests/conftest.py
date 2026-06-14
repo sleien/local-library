@@ -27,11 +27,15 @@ from app.services import books as books_service  # noqa: E402
 
 @pytest_asyncio.fixture(autouse=True)
 async def clean_db():
-    """Recreate the schema and start each test from an empty database."""
+    """Rebuild the schema before each test so model changes are always reflected.
+
+    Drops the whole schema (avoids constraint-name issues with the circular
+    book<->cover_candidate FK) and recreates all tables from the models.
+    """
     async with engine.begin() as conn:
+        await conn.exec_driver_sql("DROP SCHEMA public CASCADE")
+        await conn.exec_driver_sql("CREATE SCHEMA public")
         await conn.run_sync(Base.metadata.create_all)
-        tables = ", ".join(f'"{t.name}"' for t in reversed(Base.metadata.sorted_tables))
-        await conn.exec_driver_sql(f"TRUNCATE {tables} RESTART IDENTITY CASCADE")
     yield
 
 

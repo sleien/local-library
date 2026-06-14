@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { Mail, Phone, UserPlus } from "lucide-react";
+import { Mail, Phone, Search, UserPlus } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { useAuth } from "@/auth/AuthContext";
 import { useToast } from "@/components/Toast";
@@ -25,6 +25,7 @@ export function PeoplePage() {
   const qc = useQueryClient();
   const toast = useToast();
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [q, setQ] = useState("");
 
   const { data: people, isLoading } = useQuery({
     queryKey: ["people", hid],
@@ -58,13 +59,34 @@ export function PeoplePage() {
         )}
       </div>
 
+      {people && people.length > 0 && (
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search people by name or email..."
+            className="pl-9"
+          />
+        </div>
+      )}
+
       {isLoading ? (
         <PageSpinner />
       ) : !people || people.length === 0 ? (
         <EmptyState title="No people yet" hint="Add the people you lend books to." />
       ) : (
         <div className="space-y-2">
-          {people.map((p) => (
+          {people
+            .filter((p) => {
+              const s = q.trim().toLowerCase();
+              return (
+                !s ||
+                p.name.toLowerCase().includes(s) ||
+                (p.email ?? "").toLowerCase().includes(s)
+              );
+            })
+            .map((p) => (
             <Link key={p.id} to={`/people/${p.id}`}>
               <Card className="flex items-center justify-between p-3 transition-colors hover:bg-accent">
                 <div className="min-w-0">

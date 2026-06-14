@@ -32,6 +32,7 @@ def _person_out(person: Person, active: int) -> PersonOut:
         email=person.email,
         phone=person.phone,
         notes=person.notes,
+        user_id=person.user_id,
         active_loan_count=active,
     )
 

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Check,
@@ -19,7 +20,7 @@ import { useAuth } from "@/auth/AuthContext";
 import { useTheme } from "@/theme/ThemeProvider";
 import { useToast } from "@/components/Toast";
 import { startTour } from "@/onboarding/tour";
-import { Button, Card, Input, Label, Select } from "@/components/ui";
+import { Button, buttonClass, Card, Input, Label, Select } from "@/components/ui";
 import type { ApiToken, Invite, Member, Share, TokenCreated, UserSelect } from "@/lib/types";
 
 export function SettingsPage() {
@@ -157,6 +158,18 @@ export function SettingsPage() {
             <PlayCircle className="h-4 w-4" /> Replay tour
           </Button>
         </div>
+      </Card>
+
+      <Card className="flex items-center justify-between p-4">
+        <div>
+          <h2 className="font-semibold">Libraries</h2>
+          <p className="text-sm text-muted-foreground">
+            View every library you can access and create new ones.
+          </p>
+        </div>
+        <Link to="/libraries" className={buttonClass("outline", "sm")}>
+          Manage
+        </Link>
       </Card>
 
       <Card className="p-4">

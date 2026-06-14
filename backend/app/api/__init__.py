@@ -12,6 +12,7 @@ from app.api import (
     locations,
     lookup,
     people,
+    reading,
     search,
     tags,
     tokens,
@@ -32,3 +33,4 @@ api_router.include_router(search.router)
 api_router.include_router(assets.router)
 api_router.include_router(tokens.router)
 api_router.include_router(users.router)
+api_router.include_router(reading.router)

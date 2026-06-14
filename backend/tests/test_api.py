@@ -357,3 +357,62 @@ async def test_upload_cover(auth_client):
         files={"file": ("notes.txt", b"definitely not an image " * 20, "text/plain")},
     )
     assert bad.status_code == 400
+
+
+async def test_reading_log(auth_client):
+    hid = auth_client.household_id
+    book = (
+        await auth_client.post(
+            f"/api/households/{hid}/books/from-lookup",
+            json={"isbn": "9780134685991", "lookup": sample_lookup()},
+        )
+    ).json()
+    await auth_client.put(
+        f"/api/households/{hid}/books/{book['id']}/status",
+        json={"status": "read", "rating": 5, "finished_at": "2026-01-15"},
+    )
+    log = (await auth_client.get("/api/reading-log")).json()
+    assert len(log) == 1
+    assert log[0]["book_id"] == book["id"]
+    assert log[0]["finished_at"] == "2026-01-15"
+    assert log[0]["rating"] == 5
+
+
+async def test_lend_to_user(auth_client):
+    hid = auth_client.household_id
+    book = (
+        await auth_client.post(
+            f"/api/households/{hid}/books/from-lookup",
+            json={"isbn": "9780134685991", "lookup": sample_lookup()},
+        )
+    ).json()
+    copy = (
+        await auth_client.post(f"/api/households/{hid}/books/{book['id']}/copies", json={})
+    ).json()
+    async with fresh_client() as b:
+        await register(b, "friend@s.com", "Friend")
+    friend = next(
+        u for u in (await auth_client.get("/api/users")).json() if u["email"] == "friend@s.com"
+    )
+
+    # Lend directly to the user -> a linked borrower is created.
+    loan = await auth_client.post(
+        f"/api/households/{hid}/loans", json={"copy_id": copy["id"], "user_id": friend["id"]}
+    )
+    assert loan.status_code == 201
+    people = (await auth_client.get(f"/api/households/{hid}/people")).json()
+    linked = [p for p in people if p["user_id"] == friend["id"]]
+    assert len(linked) == 1 and linked[0]["name"] == "Friend"
+
+    # Returning then lending again reuses the same linked borrower (no duplicate).
+    await auth_client.post(f"/api/households/{hid}/loans/{loan.json()['id']}/return", json={})
+    again = await auth_client.post(
+        f"/api/households/{hid}/loans", json={"copy_id": copy["id"], "user_id": friend["id"]}
+    )
+    assert again.status_code == 201
+    people2 = (await auth_client.get(f"/api/households/{hid}/people")).json()
+    assert len([p for p in people2 if p["user_id"] == friend["id"]]) == 1
+
+    # Providing neither person_id nor user_id is rejected.
+    bad = await auth_client.post(f"/api/households/{hid}/loans", json={"copy_id": copy["id"]})
+    assert bad.status_code == 400

@@ -193,6 +193,19 @@ class BookDetail(BookSummary):
 # --- Mass add ---------------------------------------------------------------
 
 
+class ReadingLogEntry(BaseModel):
+    """One read book with the dates it was read, for the timeline."""
+
+    book_id: int
+    title: str
+    authors: list[str] = []
+    cover_url: str | None = None
+    rating: int | None = None
+    started_at: date | None = None
+    finished_at: date | None = None
+    household_id: int | None = None
+
+
 class BulkAddIn(BaseModel):
     location_id: int | None = None
     isbns: list[str] = Field(min_length=1)

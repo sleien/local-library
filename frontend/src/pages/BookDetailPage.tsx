@@ -29,7 +29,7 @@ import {
   Textarea,
 } from "@/components/ui";
 import { formatDate } from "@/lib/utils";
-import type { BookDetail, CopyOut, Loan, LocationNode, Person } from "@/lib/types";
+import type { BookDetail, CopyOut, Loan, LocationNode, Person, UserSelect } from "@/lib/types";
 
 function flatten(nodes: LocationNode[], depth = 0): { id: number; label: string }[] {
   return nodes.flatMap((n) => [
@@ -56,6 +56,11 @@ export function BookDetailPage() {
   const { data: people } = useQuery({
     queryKey: ["people", hid],
     queryFn: () => api.get<Person[]>(`/api/households/${hid}/people`),
+    enabled: !!hid,
+  });
+  const { data: allUsers } = useQuery({
+    queryKey: ["users"],
+    queryFn: () => api.get<UserSelect[]>("/api/users"),
     enabled: !!hid,
   });
   const { data: locations } = useQuery({
@@ -157,8 +162,10 @@ export function BookDetailPage() {
   const [status, setStatus] = useState("want");
   const [rating, setRating] = useState<number | null>(null);
   const [review, setReview] = useState("");
+  const [startedAt, setStartedAt] = useState("");
+  const [finishedAt, setFinishedAt] = useState("");
   const [lendCopy, setLendCopy] = useState<CopyOut | null>(null);
-  const [lendPerson, setLendPerson] = useState("");
+  const [lendTarget, setLendTarget] = useState(""); // "person:<id>" or "user:<id>"
   const [lendDue, setLendDue] = useState("");
   const [addCopyOpen, setAddCopyOpen] = useState(false);
   const [newCopyLocation, setNewCopyLocation] = useState("");
@@ -172,6 +179,8 @@ export function BookDetailPage() {
         status,
         rating,
         review: review || null,
+        started_at: startedAt || null,
+        finished_at: finishedAt || null,
       }),
     onSuccess: () => {
       refresh();
@@ -180,16 +189,20 @@ export function BookDetailPage() {
     onError,
   });
   const lend = useMutation({
-    mutationFn: () =>
-      api.post(`/api/households/${hid}/loans`, {
+    mutationFn: () => {
+      const [kind, idStr] = lendTarget.split(":");
+      const body: Record<string, unknown> = {
         copy_id: lendCopy!.id,
-        person_id: Number(lendPerson),
         due_date: lendDue ? new Date(lendDue).toISOString() : null,
-      }),
+      };
+      if (kind === "user") body.user_id = Number(idStr);
+      else body.person_id = Number(idStr);
+      return api.post(`/api/households/${hid}/loans`, body);
+    },
     onSuccess: () => {
       refresh();
       setLendCopy(null);
-      setLendPerson("");
+      setLendTarget("");
       setLendDue("");
       toast.push("Lent out", "success");
     },
@@ -230,6 +243,8 @@ export function BookDetailPage() {
     setStatus(book.my_book?.status ?? "want");
     setRating(book.my_book?.rating ?? null);
     setReview(book.my_book?.review ?? "");
+    setStartedAt(book.my_book?.started_at ?? "");
+    setFinishedAt(book.my_book?.finished_at ?? "");
     setStatusOpen(true);
   };
 
@@ -419,18 +434,7 @@ export function BookDetailPage() {
                           </Button>
                         )
                       ) : (
-                        <Button
-                          size="sm"
-                          variant="subtle"
-                          onClick={() => {
-                            if (!people || people.length === 0) {
-                              toast.push("Add a person first", "info");
-                              navigate("/people");
-                              return;
-                            }
-                            setLendCopy(copy);
-                          }}
-                        >
+                        <Button size="sm" variant="subtle" onClick={() => setLendCopy(copy)}>
                           <HandHelping className="h-3.5 w-3.5" /> Lend
                         </Button>
                       ))}
@@ -520,6 +524,20 @@ export function BookDetailPage() {
               <option value="read">Read</option>
             </Select>
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Started</Label>
+              <Input type="date" value={startedAt} onChange={(e) => setStartedAt(e.target.value)} />
+            </div>
+            <div>
+              <Label>Finished</Label>
+              <Input
+                type="date"
+                value={finishedAt}
+                onChange={(e) => setFinishedAt(e.target.value)}
+              />
+            </div>
+          </div>
           <div>
             <Label>Your rating</Label>
             <StarRating value={rating} onChange={setRating} />
@@ -541,7 +559,7 @@ export function BookDetailPage() {
             <Button variant="ghost" onClick={() => setLendCopy(null)}>
               Cancel
             </Button>
-            <Button onClick={() => lend.mutate()} loading={lend.isPending} disabled={!lendPerson}>
+            <Button onClick={() => lend.mutate()} loading={lend.isPending} disabled={!lendTarget}>
               Lend
             </Button>
           </>
@@ -550,13 +568,26 @@ export function BookDetailPage() {
         <div className="space-y-3">
           <div>
             <Label>To</Label>
-            <Select value={lendPerson} onChange={(e) => setLendPerson(e.target.value)}>
-              <option value="">Select a person</option>
-              {people?.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
+            <Select value={lendTarget} onChange={(e) => setLendTarget(e.target.value)}>
+              <option value="">Select a person or user</option>
+              {people && people.length > 0 && (
+                <optgroup label="People">
+                  {people.map((p) => (
+                    <option key={`p${p.id}`} value={`person:${p.id}`}>
+                      {p.name}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              {allUsers && allUsers.length > 0 && (
+                <optgroup label="Users">
+                  {allUsers.map((u) => (
+                    <option key={`u${u.id}`} value={`user:${u.id}`}>
+                      {u.display_name} ({u.email})
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </Select>
           </div>
           <div>

@@ -23,6 +23,10 @@ class Person(Base, TimestampMixin):
     email: Mapped[str | None] = mapped_column(String(320), nullable=True)
     phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Optional link to a registered app user, so members/friends can be lent to directly.
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("user.id", ondelete="SET NULL"), nullable=True, index=True
+    )
 
     loans: Mapped[list[Loan]] = relationship(
         back_populates="person", cascade="all, delete-orphan"
