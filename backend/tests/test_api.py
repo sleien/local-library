@@ -288,3 +288,41 @@ async def test_api_tokens(auth_client):
     async with fresh_client() as nc:
         bad = await nc.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
         assert bad.status_code == 401
+
+
+async def test_user_directory_and_add_member(auth_client):
+    hid = auth_client.household_id
+    async with fresh_client() as b:
+        await register(b, "m2@s.com", "Member Two")
+        # Owner can see the user directory and find the new user.
+        users = (await auth_client.get("/api/users")).json()
+        target = next(u for u in users if u["email"] == "m2@s.com")
+        # Before being added, b cannot write to the household.
+        assert (
+            await b.post(f"/api/households/{hid}/locations", json={"name": "X"})
+        ).status_code == 404
+        # Owner adds b directly as a member.
+        added = await auth_client.post(
+            f"/api/households/{hid}/members", json={"user_id": target["id"]}
+        )
+        assert added.status_code == 201
+        # b now has full member access.
+        me = (await b.get("/api/auth/me")).json()
+        assert any(h["id"] == hid and h["role"] == "member" for h in me["households"])
+        assert (
+            await b.post(f"/api/households/{hid}/locations", json={"name": "X"})
+        ).status_code == 201
+        # Adding the same user again conflicts.
+        assert (
+            await auth_client.post(
+                f"/api/households/{hid}/members", json={"user_id": target["id"]}
+            )
+        ).status_code == 409
+
+
+async def test_rename_household(auth_client):
+    hid = auth_client.household_id
+    r = await auth_client.patch(f"/api/households/{hid}", json={"name": "Renamed Library"})
+    assert r.status_code == 200 and r.json()["name"] == "Renamed Library"
+    households = (await auth_client.get("/api/households")).json()
+    assert any(h["id"] == hid and h["name"] == "Renamed Library" for h in households)

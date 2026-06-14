@@ -29,6 +29,14 @@ class UserOut(ORMModel):
     is_superuser: bool
 
 
+class UserSelect(ORMModel):
+    """Minimal user info for pickers (inviting/sharing)."""
+
+    id: int
+    display_name: str
+    email: str
+
+
 class HouseholdSummary(ORMModel):
     id: int
     name: str

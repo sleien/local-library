@@ -13,6 +13,15 @@ class HouseholdCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
 
 
+class HouseholdUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+
+
+class MemberAdd(BaseModel):
+    user_id: int
+    role: str = Field(default="member", pattern="^(owner|member)$")
+
+
 class HouseholdOut(ORMModel):
     id: int
     name: str

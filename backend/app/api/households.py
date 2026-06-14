@@ -21,10 +21,12 @@ from app.models import (
 from app.schemas.household import (
     HouseholdCreate,
     HouseholdOut,
+    HouseholdUpdate,
     InviteAccept,
     InviteCreate,
     InviteOut,
     InvitePreview,
+    MemberAdd,
     MemberOut,
     ShareCreate,
     ShareOut,
@@ -61,6 +63,23 @@ async def create_household(
     return household
 
 
+@router.patch("/households/{household_id}", response_model=HouseholdOut)
+async def rename_household(
+    household_id: int,
+    payload: HouseholdUpdate,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> Household:
+    await require_member(session, user, household_id, require_owner=True)
+    household = await session.get(Household, household_id)
+    if household is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Household not found")
+    household.name = payload.name
+    await session.commit()
+    await session.refresh(household)
+    return household
+
+
 @router.get("/households/{household_id}/members", response_model=list[MemberOut])
 async def list_members(
     household_id: int,
@@ -78,6 +97,38 @@ async def list_members(
         MemberOut(user_id=uid, display_name=name, email=email, role=role)
         for uid, name, email, role in rows.all()
     ]
+
+
+@router.post("/households/{household_id}/members", response_model=MemberOut, status_code=201)
+async def add_member(
+    household_id: int,
+    payload: MemberAdd,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> MemberOut:
+    """Add an existing registered user to the household as a full member."""
+    await require_member(session, user, household_id, require_owner=True)
+    target = await session.get(User, payload.user_id)
+    if target is None or not target.is_active:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "User not found")
+    existing = await session.scalar(
+        select(HouseholdMembership).where(
+            HouseholdMembership.household_id == household_id,
+            HouseholdMembership.user_id == target.id,
+        )
+    )
+    if existing is not None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "That user is already a member")
+    session.add(
+        HouseholdMembership(user_id=target.id, household_id=household_id, role=payload.role)
+    )
+    await session.commit()
+    return MemberOut(
+        user_id=target.id,
+        display_name=target.display_name,
+        email=target.email,
+        role=payload.role,
+    )
 
 
 @router.delete("/households/{household_id}/members/{member_id}", status_code=204)

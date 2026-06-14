@@ -168,6 +168,12 @@ export interface Member {
   role: string;
 }
 
+export interface UserSelect {
+  id: number;
+  display_name: string;
+  email: string;
+}
+
 export interface Invite {
   id: number;
   token: string;

@@ -1,15 +1,18 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Check,
   Copy,
   KeyRound,
   LogOut,
   Moon,
+  Pencil,
   PlayCircle,
   Share2,
   Sun,
   Trash2,
   UserPlus,
+  X,
 } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { useAuth } from "@/auth/AuthContext";
@@ -17,10 +20,10 @@ import { useTheme } from "@/theme/ThemeProvider";
 import { useToast } from "@/components/Toast";
 import { startTour } from "@/onboarding/tour";
 import { Button, Card, Input, Label, Select } from "@/components/ui";
-import type { ApiToken, Invite, Member, Share, TokenCreated } from "@/lib/types";
+import type { ApiToken, Invite, Member, Share, TokenCreated, UserSelect } from "@/lib/types";
 
 export function SettingsPage() {
-  const { me, household, logout } = useAuth();
+  const { me, household, logout, refresh } = useAuth();
   const { theme, toggle } = useTheme();
   const toast = useToast();
   const qc = useQueryClient();
@@ -32,6 +35,42 @@ export function SettingsPage() {
     queryKey: ["members", hid],
     queryFn: () => api.get<Member[]>(`/api/households/${hid}/members`),
     enabled: !!hid,
+  });
+
+  // --- Rename library + add existing users as members ---
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
+  const [addUserId, setAddUserId] = useState("");
+  const [addRole, setAddRole] = useState("member");
+
+  const { data: allUsers } = useQuery({
+    queryKey: ["users"],
+    queryFn: () => api.get<UserSelect[]>("/api/users"),
+    enabled: !!hid && isOwner,
+  });
+
+  const renameHousehold = useMutation({
+    mutationFn: () => api.patch(`/api/households/${hid}`, { name: nameDraft.trim() }),
+    onSuccess: async () => {
+      await refresh();
+      setEditingName(false);
+      toast.push("Library renamed", "success");
+    },
+    onError: (e) => toast.push(e instanceof ApiError ? e.message : "Failed", "error"),
+  });
+
+  const addMember = useMutation({
+    mutationFn: () =>
+      api.post(`/api/households/${hid}/members`, {
+        user_id: Number(addUserId),
+        role: addRole,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["members", hid] });
+      setAddUserId("");
+      toast.push("Member added", "success");
+    },
+    onError: (e) => toast.push(e instanceof ApiError ? e.message : "Failed", "error"),
   });
   const { data: invites } = useQuery({
     queryKey: ["invites", hid],
@@ -121,7 +160,45 @@ export function SettingsPage() {
       </Card>
 
       <Card className="p-4">
-        <h2 className="mb-1 font-semibold">{household?.name}</h2>
+        {editingName ? (
+          <div className="mb-3 flex items-center gap-2">
+            <Input
+              value={nameDraft}
+              onChange={(e) => setNameDraft(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && nameDraft.trim() && renameHousehold.mutate()}
+              autoFocus
+              className="max-w-xs"
+            />
+            <Button
+              size="icon"
+              aria-label="Save name"
+              onClick={() => nameDraft.trim() && renameHousehold.mutate()}
+              loading={renameHousehold.isPending}
+            >
+              <Check className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" aria-label="Cancel" onClick={() => setEditingName(false)}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        ) : (
+          <div className="mb-1 flex items-center gap-2">
+            <h2 className="font-semibold">{household?.name}</h2>
+            {isOwner && (
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Rename library"
+                onClick={() => {
+                  setNameDraft(household?.name ?? "");
+                  setEditingName(true);
+                }}
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </Button>
+            )}
+          </div>
+        )}
         <p className="mb-3 text-sm text-muted-foreground">
           Members share full read and write access to this library.
         </p>
@@ -148,13 +225,61 @@ export function SettingsPage() {
             </div>
           ))}
         </div>
+
+        {isOwner && (
+          <div className="mt-3 border-t pt-3">
+            <Label>Add a member</Label>
+            {(() => {
+              const candidates = (allUsers ?? []).filter(
+                (u) => !members?.some((m) => m.user_id === u.id),
+              );
+              return (
+                <div className="flex gap-2">
+                  <Select
+                    value={addUserId}
+                    onChange={(e) => setAddUserId(e.target.value)}
+                    className="flex-1"
+                  >
+                    <option value="">
+                      {candidates.length ? "Select a user..." : "No other users to add"}
+                    </option>
+                    {candidates.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.display_name} ({u.email})
+                      </option>
+                    ))}
+                  </Select>
+                  <Select
+                    value={addRole}
+                    onChange={(e) => setAddRole(e.target.value)}
+                    className="max-w-[8rem]"
+                  >
+                    <option value="member">Member</option>
+                    <option value="owner">Owner</option>
+                  </Select>
+                  <Button
+                    onClick={() => addUserId && addMember.mutate()}
+                    loading={addMember.isPending}
+                    disabled={!addUserId}
+                  >
+                    <UserPlus className="h-4 w-4" /> Add
+                  </Button>
+                </div>
+              );
+            })()}
+            <p className="mt-1 text-xs text-muted-foreground">
+              Pick someone with an account to give them full access right away.
+            </p>
+          </div>
+        )}
       </Card>
 
       {isOwner && (
         <Card className="p-4">
-          <h2 className="mb-1 font-semibold">Invitations</h2>
+          <h2 className="mb-1 font-semibold">Invite by link</h2>
           <p className="mb-3 text-sm text-muted-foreground">
-            Share an invite link so others (like your partner) can join this library.
+            For people who do not have an account yet: create a link they can register with to
+            join this library.
           </p>
           <div className="flex gap-2">
             <Select value={inviteRole} onChange={(e) => setInviteRole(e.target.value)} className="max-w-[10rem]">
