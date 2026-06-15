@@ -1,31 +1,89 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Camera, CheckCircle2, Plus, ScanLine, Trash2, XCircle } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  Camera,
+  CheckCircle2,
+  Plus,
+  RefreshCw,
+  RotateCw,
+  ScanLine,
+  SearchX,
+  Trash2,
+  XCircle,
+} from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { useAuth } from "@/auth/AuthContext";
 import { useToast } from "@/components/Toast";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
-import { Button, Card, Input, Label, Select } from "@/components/ui";
-import type { BulkAddResult, LocationNode } from "@/lib/types";
+import { Button, Card, EmptyState, Input, Label, Select } from "@/components/ui";
+import { cn } from "@/lib/utils";
+import type { BulkAddItem, BulkAddResult, LocationNode } from "@/lib/types";
 
 function flatten(nodes: LocationNode[]): { id: number; label: string }[] {
-  return nodes.flatMap((n) => [
-    { id: n.id, label: n.path },
-    ...flatten(n.children),
-  ]);
+  return nodes.flatMap((n) => [{ id: n.id, label: n.path }, ...flatten(n.children)]);
 }
+
+interface HistoryItem {
+  isbn: string;
+  title: string | null;
+  status: string; // added | copy_added | not_found | error
+  ts: number;
+  available?: boolean; // recheck found it in the catalog
+}
+
+type StatusFilter = "all" | "added" | "not_found" | "error";
+
+const isSuccess = (s: string) => s === "added" || s === "copy_added";
 
 export function MassAddPage() {
   const { household } = useAuth();
   const hid = household?.id;
   const toast = useToast();
+  const qc = useQueryClient();
   const [locationId, setLocationId] = useState("");
   const [camera, setCamera] = useState(false);
   const [entry, setEntry] = useState("");
   const [codes, setCodes] = useState<string[]>([]);
-  const [result, setResult] = useState<BulkAddResult | null>(null);
   const [busy, setBusy] = useState(false);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [filter, setFilter] = useState<StatusFilter>("all");
+  const [busyIsbn, setBusyIsbn] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const historyKey = hid ? `bibliothek-bulk-history-${hid}` : "";
+
+  // Load the per-library history from localStorage.
+  useEffect(() => {
+    if (!historyKey) return;
+    try {
+      const raw = localStorage.getItem(historyKey);
+      setHistory(raw ? (JSON.parse(raw) as HistoryItem[]) : []);
+    } catch {
+      setHistory([]);
+    }
+  }, [historyKey]);
+
+  const persist = (next: HistoryItem[]) => {
+    setHistory(next);
+    if (historyKey) localStorage.setItem(historyKey, JSON.stringify(next));
+  };
+
+  // Insert/replace history rows keyed by ISBN (newest first).
+  const upsert = (items: { isbn: string; title?: string | null; status: string }[]) => {
+    const map = new Map(history.map((h) => [h.isbn, h]));
+    const now = Date.now();
+    for (const it of items) {
+      const prev = map.get(it.isbn);
+      map.set(it.isbn, {
+        isbn: it.isbn,
+        title: it.title ?? prev?.title ?? null,
+        status: it.status,
+        ts: now,
+        available: isSuccess(it.status) ? undefined : prev?.available,
+      });
+    }
+    persist([...map.values()].sort((a, b) => b.ts - a.ts));
+  };
 
   const { data: locations } = useQuery({
     queryKey: ["locations", hid],
@@ -33,10 +91,8 @@ export function MassAddPage() {
     enabled: !!hid,
   });
   const locationOptions = useMemo(() => (locations ? flatten(locations) : []), [locations]);
-  const locationLabel = locationOptions.find((o) => String(o.id) === locationId)?.label.trim();
+  const locationLabel = locationOptions.find((o) => String(o.id) === locationId)?.label;
 
-  // Append a scanned code. Duplicates are allowed so the same title can be
-  // added as several copies.
   const addCode = (raw: string) => {
     const code = raw.trim();
     if (!code) return;
@@ -45,7 +101,6 @@ export function MassAddPage() {
   };
 
   const onEntryKey = (e: React.KeyboardEvent) => {
-    // A handheld (keyboard-wedge) scanner types the digits then sends Enter.
     if (e.key === "Enter") {
       e.preventDefault();
       addCode(entry);
@@ -56,15 +111,15 @@ export function MassAddPage() {
   const commit = async () => {
     if (!hid || codes.length === 0) return;
     setBusy(true);
-    setResult(null);
     try {
       const res = await api.post<BulkAddResult>(`/api/households/${hid}/copies/bulk`, {
         location_id: locationId ? Number(locationId) : null,
         isbns: codes,
       });
-      setResult(res);
+      upsert(res.items.map((i: BulkAddItem) => ({ isbn: i.isbn, title: i.title, status: i.status })));
       setCodes([]);
-      toast.push(`Added ${res.added} book${res.added === 1 ? "" : "s"}`, "success");
+      qc.invalidateQueries({ queryKey: ["search"] });
+      toast.push(`Added ${res.added}, ${res.failed} failed`, res.failed ? "info" : "success");
       inputRef.current?.focus();
     } catch (err) {
       toast.push(err instanceof ApiError ? err.message : "Bulk add failed", "error");
@@ -73,18 +128,61 @@ export function MassAddPage() {
     }
   };
 
-  // Keep the scan field focused so a handheld scanner just works.
-  useEffect(() => {
-    if (!camera) inputRef.current?.focus();
-  }, [camera]);
+  const retry = async (item: HistoryItem) => {
+    if (!hid) return;
+    setBusyIsbn(item.isbn);
+    try {
+      const res = await api.post<BulkAddResult>(`/api/households/${hid}/copies/bulk`, {
+        location_id: locationId ? Number(locationId) : null,
+        isbns: [item.isbn],
+      });
+      const r = res.items[0];
+      upsert([{ isbn: item.isbn, title: r?.title, status: r?.status ?? "error" }]);
+      qc.invalidateQueries({ queryKey: ["search"] });
+      toast.push(
+        isSuccess(r?.status ?? "") ? `Added ${r.title ?? item.isbn}` : "Still couldn't add it",
+        isSuccess(r?.status ?? "") ? "success" : "info",
+      );
+    } catch (err) {
+      toast.push(err instanceof ApiError ? err.message : "Retry failed", "error");
+    } finally {
+      setBusyIsbn(null);
+    }
+  };
+
+  // Re-check whether the ISBN is in the online catalog now (without adding).
+  const recheck = async (item: HistoryItem) => {
+    setBusyIsbn(item.isbn);
+    try {
+      await api.get(`/api/lookup/isbn/${encodeURIComponent(item.isbn)}`);
+      persist(history.map((h) => (h.isbn === item.isbn ? { ...h, available: true } : h)));
+      toast.push("Found in the catalog now — press Retry to add", "success");
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) {
+        persist(history.map((h) => (h.isbn === item.isbn ? { ...h, available: false } : h)));
+        toast.push("Still not in the catalog", "info");
+      } else {
+        toast.push("Recheck failed", "error");
+      }
+    } finally {
+      setBusyIsbn(null);
+    }
+  };
+
+  const visible = history.filter((h) => {
+    if (filter === "all") return true;
+    if (filter === "added") return isSuccess(h.status);
+    return h.status === filter;
+  });
+  const failedCount = history.filter((h) => !isSuccess(h.status)).length;
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold">Mass add</h1>
+        <h1 className="text-2xl font-semibold">Bulk add</h1>
         <p className="text-sm text-muted-foreground">
           Pick a location, then scan a stack of barcodes (handheld scanner or phone camera) and
-          add them all at once.
+          add them all at once. Anything that fails stays in the history below to retry later.
         </p>
       </div>
 
@@ -175,28 +273,98 @@ export function MassAddPage() {
         </Card>
       )}
 
-      {result && (
-        <Card className="p-4">
-          <p className="mb-2 font-medium">
-            {result.added} added, {result.failed} failed
-          </p>
-          <ul className="divide-y rounded-md border">
-            {result.items.map((item, i) => (
-              <li key={`${item.isbn}-${i}`} className="flex items-center gap-2 px-3 py-2 text-sm">
-                {item.status === "added" || item.status === "copy_added" ? (
-                  <CheckCircle2 className="h-4 w-4 shrink-0 text-green-500" />
-                ) : (
-                  <XCircle className="h-4 w-4 shrink-0 text-destructive" />
+      {history.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold">
+              History{failedCount > 0 ? ` · ${failedCount} to fix` : ""}
+            </h2>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => confirm("Clear the bulk-add history?") && persist([])}
+            >
+              Clear history
+            </Button>
+          </div>
+
+          <div className="flex flex-wrap gap-1 text-sm">
+            {(
+              [
+                ["all", "All"],
+                ["added", "Added"],
+                ["not_found", "Not found"],
+                ["error", "Errors"],
+              ] as [StatusFilter, string][]
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setFilter(key)}
+                className={cn(
+                  "rounded-full border px-3 py-1",
+                  filter === key
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:bg-accent",
                 )}
-                <span className="font-mono text-xs text-muted-foreground">{item.isbn}</span>
-                <span className="truncate">
-                  {item.title ?? (item.status === "not_found" ? "Not found" : item.message)}
-                </span>
-              </li>
+              >
+                {label}
+              </button>
             ))}
-          </ul>
-        </Card>
+          </div>
+
+          {visible.length === 0 ? (
+            <EmptyState title="Nothing here" hint="No items match this filter." />
+          ) : (
+            <ul className="divide-y rounded-md border">
+              {visible.map((item) => (
+                <li key={item.isbn} className="flex items-center gap-3 px-3 py-2">
+                  <StatusIcon status={item.status} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm">
+                      {item.title ?? <span className="text-muted-foreground">Unknown title</span>}
+                    </p>
+                    <p className="font-mono text-xs text-muted-foreground">
+                      {item.isbn}
+                      {item.available ? " · available now" : ""}
+                    </p>
+                  </div>
+                  {!isSuccess(item.status) && (
+                    <div className="flex gap-1">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={busyIsbn === item.isbn}
+                        onClick={() => recheck(item)}
+                        title="Check the online catalog again"
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" /> Recheck
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        loading={busyIsbn === item.isbn}
+                        onClick={() => retry(item)}
+                      >
+                        <RotateCw className="h-3.5 w-3.5" /> Retry
+                      </Button>
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {codes.length === 0 && history.length === 0 && !camera && (
+        <EmptyState title="Nothing scanned yet" hint="Scan a stack to add them all at once." />
       )}
     </div>
   );
+}
+
+function StatusIcon({ status }: { status: string }) {
+  if (isSuccess(status)) return <CheckCircle2 className="h-4 w-4 shrink-0 text-green-500" />;
+  if (status === "not_found") return <SearchX className="h-4 w-4 shrink-0 text-amber-500" />;
+  return <XCircle className="h-4 w-4 shrink-0 text-destructive" />;
 }

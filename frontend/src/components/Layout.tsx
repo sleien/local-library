@@ -23,7 +23,7 @@ import { Button } from "./ui";
 const nav = [
   { to: "/", label: "Library", icon: BookMarked, end: true },
   { to: "/add", label: "Add", icon: PlusCircle, end: false },
-  { to: "/scan", label: "Scan", icon: ScanLine, end: false },
+  { to: "/bulk", label: "Bulk", icon: ScanLine, end: false },
   { to: "/shelve", label: "Put away", icon: ScanSearch, end: false },
   { to: "/timeline", label: "Timeline", icon: History, end: false },
   { to: "/people", label: "People", icon: Users, end: false },
@@ -33,10 +33,10 @@ const nav = [
 ];
 
 // Items surfaced in the mobile bottom bar (the rest live behind the header).
-const mobileNav = nav.filter((n) => ["/", "/add", "/scan", "/people", "/loans"].includes(n.to));
+const mobileNav = nav.filter((n) => ["/", "/add", "/bulk", "/people", "/loans"].includes(n.to));
 
 // Routes that mutate the collection; hidden for read-only (viewer) households.
-const WRITE_ROUTES = ["/add", "/scan"];
+const WRITE_ROUTES = ["/add", "/bulk"];
 
 export function Layout({ children }: { children: ReactNode }) {
   const { me, household, setHouseholdId, logout } = useAuth();

@@ -61,7 +61,7 @@ export function startTour(): void {
         popover: {
           title: "Add books",
           description:
-            "Use Add to scan a barcode or type an ISBN, and Scan to add a whole stack at once. Enjoy!",
+            "Use Add for a single book, and Bulk to add a whole stack of ISBNs at once. Enjoy!",
         },
       },
     ],

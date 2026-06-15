@@ -28,7 +28,7 @@ export function App() {
         <Route path="/" element={<LibraryPage />} />
         <Route path="/books/:id" element={<BookDetailPage />} />
         <Route path="/add" element={<AddBookPage />} />
-        <Route path="/scan" element={<MassAddPage />} />
+        <Route path="/bulk" element={<MassAddPage />} />
         <Route path="/shelve" element={<ShelvePage />} />
         <Route path="/locations" element={<LocationsPage />} />
         <Route path="/people" element={<PeoplePage />} />
