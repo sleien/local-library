@@ -20,7 +20,7 @@ async def register(c: httpx.AsyncClient, email: str, name: str = "User") -> int:
     return r.json()["households"][0]["id"]
 
 
-def sample_lookup(isbn13="9780134685991", title="Effective Java"):
+def sample_lookup_obj(isbn13="9780134685991", title="Effective Java") -> LookupResult:
     return LookupResult(
         title=title,
         authors=["Joshua Bloch"],
@@ -32,7 +32,11 @@ def sample_lookup(isbn13="9780134685991", title="Effective Java"):
             {"source": "test", "url": "https://example.com/b.jpg"},
         ],
         sources=["test"],
-    ).model_dump()
+    )
+
+
+def sample_lookup(isbn13="9780134685991", title="Effective Java"):
+    return sample_lookup_obj(isbn13=isbn13, title=title).model_dump()
 
 
 async def test_auth_flow(client):
@@ -357,6 +361,39 @@ async def test_upload_cover(auth_client):
         files={"file": ("notes.txt", b"definitely not an image " * 20, "text/plain")},
     )
     assert bad.status_code == 400
+
+
+async def test_refresh_covers(auth_client, monkeypatch):
+    from app.api import books as books_api
+
+    async def fake_lookup(isbn):
+        return sample_lookup_obj(isbn13=isbn)
+
+    monkeypatch.setattr(books_api, "lookup_isbn", fake_lookup)
+
+    hid = auth_client.household_id
+    book = (
+        await auth_client.post(
+            f"/api/households/{hid}/books/manual",
+            json={"title": "Single Cover", "isbn13": "9780134685991"},
+        )
+    ).json()
+    assert book["covers"] == []
+
+    r = await auth_client.post(f"/api/households/{hid}/books/{book['id']}/refresh-covers")
+    assert r.status_code == 200, r.text
+    assert len(r.json()["covers"]) == 2
+
+    # Re-fetching the same covers does not create duplicates.
+    again = await auth_client.post(f"/api/households/{hid}/books/{book['id']}/refresh-covers")
+    assert len(again.json()["covers"]) == 2
+
+    # A book without an ISBN has nothing to look up.
+    no_isbn = (
+        await auth_client.post(f"/api/households/{hid}/books/manual", json={"title": "No ISBN"})
+    ).json()
+    miss = await auth_client.post(f"/api/households/{hid}/books/{no_isbn['id']}/refresh-covers")
+    assert miss.status_code == 400
 
 
 async def test_reading_log(auth_client):

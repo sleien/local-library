@@ -256,6 +256,52 @@ async def select_cover(
     return await _build_detail(session, book, user.id)
 
 
+@router.post("/{book_id}/refresh-covers", response_model=BookDetail)
+async def refresh_covers(
+    household_id: int,
+    book_id: int,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> BookDetail:
+    """Re-query metadata providers for this book's ISBN and store any newly found
+    cover candidates, so the user can pick from all covers available online."""
+    await require_member(session, user, household_id)
+    # Don't eager-load covers here: with expire_on_commit=False the post-commit
+    # reload must see the new candidates, which a stale collection would hide.
+    book = await session.scalar(
+        select(Book).where(Book.id == book_id, Book.household_id == household_id)
+    )
+    if book is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Book not found")
+    isbn = book.isbn13 or book.isbn10
+    if not isbn:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "This book has no ISBN to look up covers for"
+        )
+    lookup = await lookup_isbn(isbn)
+    if lookup is not None:
+        existing = await session.scalars(
+            select(CoverCandidate.source_url).where(CoverCandidate.book_id == book.id)
+        )
+        seen = {url for url in existing.all() if url}
+        for cover in lookup.covers:
+            if cover.url in seen:
+                continue
+            seen.add(cover.url)
+            session.add(
+                CoverCandidate(
+                    book_id=book.id,
+                    source=cover.source,
+                    source_url=cover.url,
+                    width=cover.width,
+                    height=cover.height,
+                )
+            )
+        await session.commit()
+    book = await _load_book(session, household_id, book_id)
+    return await _build_detail(session, book, user.id)
+
+
 @router.post("/{book_id}/cover", response_model=BookDetail)
 async def upload_cover(
     household_id: int,

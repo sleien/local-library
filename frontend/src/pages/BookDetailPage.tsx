@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import {
@@ -8,6 +8,7 @@ import {
   Images,
   MapPin,
   Plus,
+  RefreshCw,
   Trash2,
   Undo2,
   Upload,
@@ -25,6 +26,7 @@ import {
   Label,
   PageSpinner,
   Select,
+  Spinner,
   StarRating,
   Textarea,
 } from "@/components/ui";
@@ -136,6 +138,12 @@ export function BookDetailPage() {
     },
     onError,
   });
+  const refreshCovers = useMutation({
+    mutationFn: () =>
+      api.post<BookDetail>(`/api/households/${hid}/books/${id}/refresh-covers`),
+    onSuccess: (data) => qc.setQueryData(bookKey, data),
+    onError,
+  });
   const coverFileRef = useRef<HTMLInputElement>(null);
   const uploadCover = useMutation({
     mutationFn: (f: File) => {
@@ -171,7 +179,19 @@ export function BookDetailPage() {
   const [newCopyLocation, setNewCopyLocation] = useState("");
   const [newCopyCondition, setNewCopyCondition] = useState("");
   const [coverOpen, setCoverOpen] = useState(false);
+  const [coverFetched, setCoverFetched] = useState(false);
   const [comment, setComment] = useState("");
+
+  // When the cover editor opens, pull every cover available online once so the
+  // user can pick the right one (books added with a single cover, or none, still
+  // get the full set). The manual button below re-fetches on demand.
+  const hasIsbn = !!(book?.isbn13 || book?.isbn10);
+  useEffect(() => {
+    if (coverOpen && !coverFetched && hasIsbn) {
+      setCoverFetched(true);
+      refreshCovers.mutate();
+    }
+  }, [coverOpen, coverFetched, hasIsbn, refreshCovers]);
 
   const saveStatus = useMutation({
     mutationFn: () =>
@@ -267,24 +287,13 @@ export function BookDetailPage() {
           </div>
           {canWrite && (
             <div className="mt-2 space-y-2">
-              {book.covers.length > 1 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full"
-                  onClick={() => setCoverOpen(true)}
-                >
-                  <Images className="h-3.5 w-3.5" /> Change cover
-                </Button>
-              )}
               <Button
                 variant="outline"
                 size="sm"
                 className="w-full"
-                onClick={() => coverFileRef.current?.click()}
-                loading={uploadCover.isPending}
+                onClick={() => setCoverOpen(true)}
               >
-                <Upload className="h-3.5 w-3.5" /> Upload cover
+                <Images className="h-3.5 w-3.5" /> Change cover
               </Button>
               <input
                 ref={coverFileRef}
@@ -638,7 +647,17 @@ export function BookDetailPage() {
 
       {/* Cover picker modal */}
       <Modal open={coverOpen} onClose={() => setCoverOpen(false)} title="Choose a cover" wide>
-        <div className="mb-3">
+        <div className="mb-3 flex flex-wrap items-center gap-2">
+          {hasIsbn && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => refreshCovers.mutate()}
+              loading={refreshCovers.isPending}
+            >
+              <RefreshCw className="h-3.5 w-3.5" /> Find covers online
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -648,30 +667,41 @@ export function BookDetailPage() {
             <Upload className="h-3.5 w-3.5" /> Upload your own
           </Button>
         </div>
-        <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
-          {book.covers.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => selectCover.mutate(c.id)}
-              className={`overflow-hidden rounded-md border-2 ${
-                c.selected ? "border-primary" : "border-transparent hover:border-border"
-              }`}
-            >
-              {c.url ? (
-                <img
-                  src={c.url}
-                  alt=""
-                  className="aspect-[2/3] w-full object-cover"
-                  onError={(e) => (e.currentTarget.style.visibility = "hidden")}
-                />
-              ) : (
-                <div className="flex aspect-[2/3] items-center justify-center bg-muted">
-                  <BookOpen className="h-6 w-6 text-muted-foreground" />
-                </div>
-              )}
-            </button>
-          ))}
-        </div>
+        {refreshCovers.isPending && book.covers.length === 0 ? (
+          <div className="flex justify-center py-10">
+            <Spinner />
+          </div>
+        ) : book.covers.length === 0 ? (
+          <p className="py-6 text-center text-sm text-muted-foreground">
+            No covers available yet.{" "}
+            {hasIsbn ? "Try “Find covers online” or upload your own." : "Upload your own."}
+          </p>
+        ) : (
+          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+            {book.covers.map((c) => (
+              <button
+                key={c.id}
+                onClick={() => selectCover.mutate(c.id)}
+                className={`overflow-hidden rounded-md border-2 ${
+                  c.selected ? "border-primary" : "border-transparent hover:border-border"
+                }`}
+              >
+                {c.url ? (
+                  <img
+                    src={c.url}
+                    alt=""
+                    className="aspect-[2/3] w-full object-cover"
+                    onError={(e) => (e.currentTarget.style.visibility = "hidden")}
+                  />
+                ) : (
+                  <div className="flex aspect-[2/3] items-center justify-center bg-muted">
+                    <BookOpen className="h-6 w-6 text-muted-foreground" />
+                  </div>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
       </Modal>
     </div>
   );
