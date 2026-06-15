@@ -23,7 +23,7 @@ from app.schemas.book import (
 from app.services import serializers
 from app.services.books import create_book_from_lookup, find_book_by_isbn
 from app.services.locations import build_path, get_location_map
-from app.services.metadata import lookup_isbn, normalize_isbn
+from app.services.metadata import isbn_variants, lookup_isbn, normalize_isbn
 
 router = APIRouter(prefix="/households/{household_id}", tags=["copies"])
 
@@ -55,14 +55,15 @@ async def locate(
 ) -> ShelfLocateOut:
     """Find where a scanned book should be put back, by ISBN."""
     await require_household_access(session, user, household_id)
-    norm = normalize_isbn(isbn)
+    i10, i13 = isbn_variants(isbn)
     book = None
-    if norm:
+    forms = [v for v in (i10, i13) if v]
+    if forms:
         book = await session.scalar(
             select(Book)
             .where(
                 Book.household_id == household_id,
-                or_(Book.isbn13 == norm, Book.isbn10 == norm),
+                or_(Book.isbn13.in_(forms), Book.isbn10.in_(forms)),
             )
             .options(
                 selectinload(Book.copies),
@@ -193,7 +194,8 @@ async def bulk_add(
             failed += 1
             continue
         try:
-            existing = await find_book_by_isbn(session, household_id, isbn, isbn)
+            i10, i13 = isbn_variants(isbn)
+            existing = await find_book_by_isbn(session, household_id, i10, i13)
             if existing is None:
                 lookup = await lookup_isbn(isbn)
                 if lookup is None:

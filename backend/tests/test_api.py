@@ -506,3 +506,12 @@ async def test_export_csv(auth_client):
     assert "9780134685991" in body
     assert "Effective Java" in body
     assert "Office" in body
+
+
+def test_isbn_conversion():
+    from app.services.metadata import isbn10_to_isbn13, isbn13_to_isbn10
+
+    assert isbn10_to_isbn13("3150097622") == "9783150097625"
+    assert isbn13_to_isbn10("9783150097625") == "3150097622"
+    # Non-978 ISBN-13 has no ISBN-10 equivalent.
+    assert isbn13_to_isbn10("9791234567896") is None

@@ -21,6 +21,34 @@ def normalize_isbn(raw: str) -> str:
     return re.sub(r"[^0-9Xx]", "", raw).upper()
 
 
+def isbn10_to_isbn13(isbn10: str) -> str | None:
+    if len(isbn10) != 10 or not isbn10[:9].isdigit():
+        return None
+    core = "978" + isbn10[:9]
+    total = sum((1 if i % 2 == 0 else 3) * int(c) for i, c in enumerate(core))
+    return core + str((10 - total % 10) % 10)
+
+
+def isbn13_to_isbn10(isbn13: str) -> str | None:
+    if len(isbn13) != 13 or not isbn13.startswith("978") or not isbn13.isdigit():
+        return None
+    core = isbn13[3:12]
+    total = sum((10 - i) * int(c) for i, c in enumerate(core))
+    check = (11 - total % 11) % 11
+    return core + ("X" if check == 10 else str(check))
+
+
+def isbn_variants(scanned: str) -> tuple[str | None, str | None]:
+    """Return (isbn10, isbn13) for a scanned ISBN, deriving the missing form so a
+    book is matched whichever barcode form was stored or scanned."""
+    norm = normalize_isbn(scanned)
+    if len(norm) == 13:
+        return isbn13_to_isbn10(norm), norm
+    if len(norm) == 10:
+        return norm, isbn10_to_isbn13(norm)
+    return None, None
+
+
 class MetadataProvider:
     name = "base"
 
@@ -201,10 +229,15 @@ async def lookup_isbn(isbn: str) -> LookupResult | None:
             if result is None:
                 continue
             merged = result if merged is None else _merge(merged, result)
-    if merged and not (merged.isbn13 or merged.isbn10):
-        # Fall back to the queried ISBN.
-        if len(isbn) == 13:
+    if merged:
+        # Always record the scanned ISBN, even if the provider only returned the
+        # other form, then derive the missing form so either barcode matches.
+        if len(isbn) == 13 and not merged.isbn13:
             merged.isbn13 = isbn
-        elif len(isbn) == 10:
+        elif len(isbn) == 10 and not merged.isbn10:
             merged.isbn10 = isbn
+        if merged.isbn13 and not merged.isbn10:
+            merged.isbn10 = isbn13_to_isbn10(merged.isbn13)
+        if merged.isbn10 and not merged.isbn13:
+            merged.isbn13 = isbn10_to_isbn13(merged.isbn10)
     return merged
