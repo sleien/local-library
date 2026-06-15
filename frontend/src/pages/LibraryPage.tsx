@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { Filter, History, PlusCircle, Search, X } from "lucide-react";
+import { Filter, History, PlusCircle, ScanSearch, Search, X } from "lucide-react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/auth/AuthContext";
 import { hasSeenTour, startTour } from "@/onboarding/tour";
@@ -9,10 +9,10 @@ import type { BookSummary, LocationNode, Tag } from "@/lib/types";
 import { BookCard } from "@/components/BookCard";
 import { Badge, Button, buttonClass, EmptyState, Input, PageSpinner, Select } from "@/components/ui";
 
-function flattenLocations(nodes: LocationNode[], depth = 0): { id: number; label: string }[] {
+function flattenLocations(nodes: LocationNode[]): { id: number; label: string }[] {
   return nodes.flatMap((n) => [
-    { id: n.id, label: `${"  ".repeat(depth)}${n.name}` },
-    ...flattenLocations(n.children, depth + 1),
+    { id: n.id, label: n.path },
+    ...flattenLocations(n.children),
   ]);
 }
 
@@ -87,6 +87,10 @@ export function LibraryPage() {
           <Link to="/timeline" className={buttonClass("outline", "md")} title="Reading timeline">
             <History className="h-4 w-4" />
             <span className="hidden sm:inline">Timeline</span>
+          </Link>
+          <Link to="/shelve" className={buttonClass("outline", "md")} title="Put a book away">
+            <ScanSearch className="h-4 w-4" />
+            <span className="hidden sm:inline">Put away</span>
           </Link>
           {canWrite && (
             <Link to="/add" className={buttonClass("default", "md", "hidden md:inline-flex")}>

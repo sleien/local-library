@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.auth.deps import get_current_user, require_member
+from app.auth.deps import get_current_user, require_household_access, require_member
 from app.db import get_session
 from app.models import Book, Copy, Loan, Location, User
 from app.schemas.book import (
@@ -17,6 +17,8 @@ from app.schemas.book import (
     CopyCreate,
     CopyOut,
     CopyUpdate,
+    ShelfCopyLocation,
+    ShelfLocateOut,
 )
 from app.services import serializers
 from app.services.books import create_book_from_lookup, find_book_by_isbn
@@ -41,6 +43,56 @@ async def _active_loan(session: AsyncSession, copy_id: int) -> Loan | None:
         select(Loan)
         .where(Loan.copy_id == copy_id, Loan.returned_at.is_(None))
         .options(selectinload(Loan.person))
+    )
+
+
+@router.get("/locate", response_model=ShelfLocateOut)
+async def locate(
+    household_id: int,
+    isbn: str,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> ShelfLocateOut:
+    """Find where a scanned book should be put back, by ISBN."""
+    await require_household_access(session, user, household_id)
+    norm = normalize_isbn(isbn)
+    book = None
+    if norm:
+        book = await session.scalar(
+            select(Book)
+            .where(
+                Book.household_id == household_id,
+                or_(Book.isbn13 == norm, Book.isbn10 == norm),
+            )
+            .options(
+                selectinload(Book.copies),
+                selectinload(Book.selected_cover),
+                selectinload(Book.covers),
+            )
+        )
+    if book is None:
+        return ShelfLocateOut(isbn=isbn, found=False)
+
+    loc_map = await get_location_map(session, household_id)
+    copies: list[ShelfCopyLocation] = []
+    for copy in sorted(book.copies, key=lambda c: c.id):
+        loan = await _active_loan(session, copy.id)
+        copies.append(
+            ShelfCopyLocation(
+                copy_id=copy.id,
+                location_path=build_path(loc_map, copy.location_id),
+                is_borrowed=loan is not None,
+                borrowed_by=loan.person.name if loan and loan.person else None,
+            )
+        )
+    return ShelfLocateOut(
+        isbn=isbn,
+        found=True,
+        book_id=book.id,
+        title=book.title,
+        authors=book.authors or [],
+        cover_url=serializers.cover_url_for(book),
+        copies=copies,
     )
 
 

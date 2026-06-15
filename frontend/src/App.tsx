@@ -7,6 +7,7 @@ import { LibraryPage } from "./pages/LibraryPage";
 import { BookDetailPage } from "./pages/BookDetailPage";
 import { AddBookPage } from "./pages/AddBookPage";
 import { MassAddPage } from "./pages/MassAddPage";
+import { ShelvePage } from "./pages/ShelvePage";
 import { LocationsPage } from "./pages/LocationsPage";
 import { PeoplePage } from "./pages/PeoplePage";
 import { PersonDetailPage } from "./pages/PersonDetailPage";
@@ -28,6 +29,7 @@ export function App() {
         <Route path="/books/:id" element={<BookDetailPage />} />
         <Route path="/add" element={<AddBookPage />} />
         <Route path="/scan" element={<MassAddPage />} />
+        <Route path="/shelve" element={<ShelvePage />} />
         <Route path="/locations" element={<LocationsPage />} />
         <Route path="/people" element={<PeoplePage />} />
         <Route path="/people/:id" element={<PersonDetailPage />} />

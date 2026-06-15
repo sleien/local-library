@@ -31,10 +31,10 @@ import {
 import { formatDate } from "@/lib/utils";
 import type { BookDetail, CopyOut, Loan, LocationNode, Person, UserSelect } from "@/lib/types";
 
-function flatten(nodes: LocationNode[], depth = 0): { id: number; label: string }[] {
+function flatten(nodes: LocationNode[]): { id: number; label: string }[] {
   return nodes.flatMap((n) => [
-    { id: n.id, label: `${"  ".repeat(depth)}${n.name}` },
-    ...flatten(n.children, depth + 1),
+    { id: n.id, label: n.path },
+    ...flatten(n.children),
   ]);
 }
 

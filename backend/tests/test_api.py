@@ -416,3 +416,32 @@ async def test_lend_to_user(auth_client):
     # Providing neither person_id nor user_id is rejected.
     bad = await auth_client.post(f"/api/households/{hid}/loans", json={"copy_id": copy["id"]})
     assert bad.status_code == 400
+
+
+async def test_locate(auth_client):
+    hid = auth_client.household_id
+    office = (
+        await auth_client.post(f"/api/households/{hid}/locations", json={"name": "Office"})
+    ).json()
+    shelf = (
+        await auth_client.post(
+            f"/api/households/{hid}/locations", json={"name": "Shelf 1", "parent_id": office["id"]}
+        )
+    ).json()
+    book = (
+        await auth_client.post(
+            f"/api/households/{hid}/books/from-lookup",
+            json={"isbn": "9780134685991", "lookup": sample_lookup()},
+        )
+    ).json()
+    await auth_client.post(
+        f"/api/households/{hid}/books/{book['id']}/copies", json={"location_id": shelf["id"]}
+    )
+
+    found = (await auth_client.get(f"/api/households/{hid}/locate?isbn=9780134685991")).json()
+    assert found["found"] is True
+    assert found["book_id"] == book["id"]
+    assert found["copies"][0]["location_path"] == "Office / Shelf 1"
+
+    miss = (await auth_client.get(f"/api/households/{hid}/locate?isbn=9999999999999")).json()
+    assert miss["found"] is False

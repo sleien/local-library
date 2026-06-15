@@ -193,6 +193,25 @@ class BookDetail(BookSummary):
 # --- Mass add ---------------------------------------------------------------
 
 
+class ShelfCopyLocation(BaseModel):
+    copy_id: int
+    location_path: str | None = None
+    is_borrowed: bool = False
+    borrowed_by: str | None = None
+
+
+class ShelfLocateOut(BaseModel):
+    """Where a scanned book should be put back."""
+
+    isbn: str
+    found: bool
+    book_id: int | None = None
+    title: str | None = None
+    authors: list[str] = []
+    cover_url: str | None = None
+    copies: list[ShelfCopyLocation] = []
+
+
 class ReadingLogEntry(BaseModel):
     """One read book with the dates it was read, for the timeline."""
 

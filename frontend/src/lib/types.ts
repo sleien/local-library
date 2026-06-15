@@ -140,6 +140,23 @@ export interface Person {
   active_loan_count: number;
 }
 
+export interface ShelfCopyLocation {
+  copy_id: number;
+  location_path: string | null;
+  is_borrowed: boolean;
+  borrowed_by: string | null;
+}
+
+export interface ShelfLocate {
+  isbn: string;
+  found: boolean;
+  book_id: number | null;
+  title: string | null;
+  authors: string[];
+  cover_url: string | null;
+  copies: ShelfCopyLocation[];
+}
+
 export interface ReadingLogEntry {
   book_id: number;
   title: string;
