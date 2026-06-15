@@ -28,6 +28,7 @@ The name is German for "library".
 - Mass add: pick a location, scan a stack of barcodes in a row, and add them all at once.
 - Full-text search across titles, authors, ISBNs and descriptions, with filters for tags,
   location, read status, and availability.
+- Export a library to CSV and import books by ISBN (paste a list or upload a file).
 - Multiple users per household with full shared read and write access (for example, you and
   your partner). Invite others with a link.
 - Share a library read-only with friends in other households: they can browse and search your

@@ -7,6 +7,7 @@ from app.api import (
     auth,
     books,
     copies,
+    export,
     households,
     loans,
     locations,
@@ -34,3 +35,4 @@ api_router.include_router(assets.router)
 api_router.include_router(tokens.router)
 api_router.include_router(users.router)
 api_router.include_router(reading.router)
+api_router.include_router(export.router)

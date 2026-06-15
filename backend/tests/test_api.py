@@ -482,3 +482,27 @@ async def test_edit_loan_dates(auth_client):
     )
     assert r2.json()["is_active"] is True
     assert r2.json()["returned_at"] is None
+
+
+async def test_export_csv(auth_client):
+    hid = auth_client.household_id
+    loc = (
+        await auth_client.post(f"/api/households/{hid}/locations", json={"name": "Office"})
+    ).json()
+    book = (
+        await auth_client.post(
+            f"/api/households/{hid}/books/from-lookup",
+            json={"isbn": "9780134685991", "lookup": sample_lookup()},
+        )
+    ).json()
+    await auth_client.post(
+        f"/api/households/{hid}/books/{book['id']}/copies", json={"location_id": loc["id"]}
+    )
+    r = await auth_client.get(f"/api/households/{hid}/export")
+    assert r.status_code == 200
+    assert "text/csv" in r.headers["content-type"]
+    body = r.text
+    assert "ISBN13" in body
+    assert "9780134685991" in body
+    assert "Effective Java" in body
+    assert "Office" in body

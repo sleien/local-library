@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Check,
   Copy,
+  Download,
   KeyRound,
   LogOut,
   Moon,
@@ -12,6 +13,7 @@ import {
   Share2,
   Sun,
   Trash2,
+  Upload,
   UserPlus,
   X,
 } from "lucide-react";
@@ -20,8 +22,29 @@ import { useAuth } from "@/auth/AuthContext";
 import { useTheme } from "@/theme/ThemeProvider";
 import { useToast } from "@/components/Toast";
 import { startTour } from "@/onboarding/tour";
-import { Button, buttonClass, Card, Input, Label, Select } from "@/components/ui";
-import type { ApiToken, Invite, Member, Share, TokenCreated, UserSelect } from "@/lib/types";
+import { Button, buttonClass, Card, Input, Label, Select, Textarea } from "@/components/ui";
+import type {
+  ApiToken,
+  BulkAddResult,
+  Invite,
+  LocationNode,
+  Member,
+  Share,
+  TokenCreated,
+  UserSelect,
+} from "@/lib/types";
+
+function flattenLocations(nodes: LocationNode[]): { id: number; label: string }[] {
+  return nodes.flatMap((n) => [{ id: n.id, label: n.path }, ...flattenLocations(n.children)]);
+}
+
+// Pull ISBN-like tokens (10 or 13 chars) out of pasted text or a CSV.
+function parseIsbns(text: string): string[] {
+  return text
+    .split(/[\s,;]+/)
+    .map((t) => t.replace(/[^0-9Xx]/g, ""))
+    .filter((t) => t.length === 10 || t.length === 13);
+}
 
 export function SettingsPage() {
   const { me, household, logout, refresh } = useAuth();
@@ -30,6 +53,7 @@ export function SettingsPage() {
   const qc = useQueryClient();
   const hid = household?.id;
   const isOwner = household?.role === "owner";
+  const canWrite = household?.role !== "viewer";
   const [inviteRole, setInviteRole] = useState("member");
 
   const { data: members } = useQuery({
@@ -136,6 +160,47 @@ export function SettingsPage() {
     mutationFn: (tokenId: number) => api.del(`/api/tokens/${tokenId}`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tokens"] }),
   });
+
+  // --- Import (by ISBN) ---
+  const [importText, setImportText] = useState("");
+  const [importLoc, setImportLoc] = useState("");
+  const [importResult, setImportResult] = useState<BulkAddResult | null>(null);
+  const { data: locations } = useQuery({
+    queryKey: ["locations", hid],
+    queryFn: () => api.get<LocationNode[]>(`/api/households/${hid}/locations`),
+    enabled: !!hid && canWrite,
+  });
+  const locationOptions = locations ? flattenLocations(locations) : [];
+
+  const importMut = useMutation({
+    mutationFn: (isbns: string[]) =>
+      api.post<BulkAddResult>(`/api/households/${hid}/copies/bulk`, {
+        location_id: importLoc ? Number(importLoc) : null,
+        isbns,
+      }),
+    onSuccess: (res) => {
+      qc.invalidateQueries({ queryKey: ["search"] });
+      setImportResult(res);
+      setImportText("");
+      toast.push(`Imported ${res.added} book${res.added === 1 ? "" : "s"}`, "success");
+    },
+    onError: (e) => toast.push(e instanceof ApiError ? e.message : "Import failed", "error"),
+  });
+
+  const runImport = () => {
+    const isbns = parseIsbns(importText);
+    if (isbns.length === 0) {
+      toast.push("No ISBNs found in the text", "error");
+      return;
+    }
+    importMut.mutate(isbns);
+  };
+
+  const onImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) file.text().then((t) => setImportText(t));
+    e.target.value = "";
+  };
 
   const inviteLink = (token: string) => `${window.location.origin}/?invite=${token}`;
   const copy = (text: string) => {
@@ -431,6 +496,56 @@ export function SettingsPage() {
                 </Button>
               </div>
             ))}
+          </div>
+        )}
+      </Card>
+
+      <Card className="p-4">
+        <h2 className="mb-1 flex items-center gap-2 font-semibold">
+          <Download className="h-4 w-4" /> Import & export
+        </h2>
+        <p className="mb-3 text-sm text-muted-foreground">
+          Export this library to a CSV (one row per book, with ISBNs), or import books by ISBN.
+        </p>
+        <a href={`/api/households/${hid}/export`} download className={buttonClass("outline", "sm")}>
+          <Download className="h-4 w-4" /> Export CSV
+        </a>
+
+        {canWrite && (
+          <div className="mt-4 space-y-2 border-t pt-4">
+            <Label>Import by ISBN</Label>
+            <Textarea
+              value={importText}
+              onChange={(e) => setImportText(e.target.value)}
+              placeholder="Paste ISBNs (one per line) or a CSV exported from Bibliothek"
+              rows={4}
+            />
+            <div className="flex flex-wrap items-center gap-2">
+              <label className={buttonClass("outline", "sm", "cursor-pointer")}>
+                <Upload className="h-4 w-4" /> Choose file
+                <input type="file" accept=".csv,.txt" className="hidden" onChange={onImportFile} />
+              </label>
+              <Select
+                value={importLoc}
+                onChange={(e) => setImportLoc(e.target.value)}
+                className="h-8 max-w-[16rem] text-sm"
+              >
+                <option value="">Unassigned location</option>
+                {locationOptions.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+              <Button size="sm" onClick={runImport} loading={importMut.isPending}>
+                Import
+              </Button>
+            </div>
+            {importResult && (
+              <p className="text-sm text-muted-foreground">
+                Added {importResult.added}, {importResult.failed} failed.
+              </p>
+            )}
           </div>
         )}
       </Card>
