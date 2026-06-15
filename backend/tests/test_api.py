@@ -445,3 +445,40 @@ async def test_locate(auth_client):
 
     miss = (await auth_client.get(f"/api/households/{hid}/locate?isbn=9999999999999")).json()
     assert miss["found"] is False
+
+
+async def test_edit_loan_dates(auth_client):
+    hid = auth_client.household_id
+    book = (
+        await auth_client.post(
+            f"/api/households/{hid}/books/from-lookup",
+            json={"isbn": "9780134685991", "lookup": sample_lookup()},
+        )
+    ).json()
+    copy = (
+        await auth_client.post(f"/api/households/{hid}/books/{book['id']}/copies", json={})
+    ).json()
+    person = (
+        await auth_client.post(f"/api/households/{hid}/people", json={"name": "Alice"})
+    ).json()
+    loan = (
+        await auth_client.post(
+            f"/api/households/{hid}/loans", json={"copy_id": copy["id"], "person_id": person["id"]}
+        )
+    ).json()
+
+    # Set a specific return date.
+    r = await auth_client.patch(
+        f"/api/households/{hid}/loans/{loan['id']}",
+        json={"returned_at": "2026-02-01T00:00:00Z"},
+    )
+    assert r.status_code == 200
+    assert r.json()["is_active"] is False
+    assert r.json()["returned_at"].startswith("2026-02-01")
+
+    # Clearing it reopens the loan.
+    r2 = await auth_client.patch(
+        f"/api/households/{hid}/loans/{loan['id']}", json={"returned_at": None}
+    )
+    assert r2.json()["is_active"] is True
+    assert r2.json()["returned_at"] is None

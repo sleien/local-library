@@ -59,6 +59,16 @@ class LoanReturn(BaseModel):
     returned_at: datetime | None = None
 
 
+class LoanUpdate(BaseModel):
+    """Edit a loan's dates/notes. Only provided fields change; returned_at may be
+    set to null to reopen a returned loan."""
+
+    lent_at: datetime | None = None
+    due_date: datetime | None = None
+    returned_at: datetime | None = None
+    notes: str | None = None
+
+
 class LoanOut(ORMModel):
     id: int
     copy_id: int

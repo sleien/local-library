@@ -12,7 +12,14 @@ from sqlalchemy.orm import selectinload
 from app.auth.deps import get_current_user, require_household_access, require_member
 from app.db import get_session
 from app.models import Copy, Loan, LoanFeedback, Person, User
-from app.schemas.loan import FeedbackIn, FeedbackOut, LoanCreate, LoanOut, LoanReturn
+from app.schemas.loan import (
+    FeedbackIn,
+    FeedbackOut,
+    LoanCreate,
+    LoanOut,
+    LoanReturn,
+    LoanUpdate,
+)
 from app.services import serializers
 
 router = APIRouter(prefix="/households/{household_id}", tags=["loans"])
@@ -146,6 +153,27 @@ async def return_loan(
     if loan.returned_at is not None:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Loan is already returned")
     loan.returned_at = payload.returned_at or datetime.now(UTC)
+    await session.commit()
+    return _serialize(await _load_loan(session, household_id, loan_id))
+
+
+@router.patch("/loans/{loan_id}", response_model=LoanOut)
+async def update_loan(
+    household_id: int,
+    loan_id: int,
+    payload: LoanUpdate,
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> LoanOut:
+    """Edit a loan's dates or notes (e.g. correct the return date)."""
+    await require_member(session, user, household_id)
+    loan = await _load_loan(session, household_id, loan_id)
+    data = payload.model_dump(exclude_unset=True)
+    # lent_at is required; ignore an explicit null.
+    if data.get("lent_at") is None:
+        data.pop("lent_at", None)
+    for field, value in data.items():
+        setattr(loan, field, value)
     await session.commit()
     return _serialize(await _load_loan(session, household_id, loan_id))
 

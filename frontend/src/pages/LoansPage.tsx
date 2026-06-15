@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { MessageSquare, Undo2 } from "lucide-react";
+import { MessageSquare, Pencil, Undo2 } from "lucide-react";
 import { api, ApiError } from "@/lib/api";
 import { useAuth } from "@/auth/AuthContext";
 import { useToast } from "@/components/Toast";
@@ -10,6 +10,7 @@ import {
   Button,
   Card,
   EmptyState,
+  Input,
   Label,
   PageSpinner,
   StarRating,
@@ -28,6 +29,10 @@ export function LoansPage() {
   const [feedbackFor, setFeedbackFor] = useState<Loan | null>(null);
   const [rating, setRating] = useState<number | null>(null);
   const [comment, setComment] = useState("");
+  const [editLoan, setEditLoan] = useState<Loan | null>(null);
+  const [lentDate, setLentDate] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const [returnedDate, setReturnedDate] = useState("");
 
   const query = filter === "active" ? "?active=true" : "";
   const { data: loans, isLoading } = useQuery({
@@ -66,6 +71,28 @@ export function LoansPage() {
     setRating(loan.feedback?.rating ?? null);
     setComment(loan.feedback?.comment ?? "");
     setFeedbackFor(loan);
+  };
+
+  const editMut = useMutation({
+    mutationFn: (loanId: number) =>
+      api.patch(`/api/households/${hid}/loans/${loanId}`, {
+        lent_at: lentDate ? new Date(lentDate).toISOString() : undefined,
+        due_date: dueDate ? new Date(dueDate).toISOString() : null,
+        returned_at: returnedDate ? new Date(returnedDate).toISOString() : null,
+      }),
+    onSuccess: () => {
+      invalidate();
+      setEditLoan(null);
+      toast.push("Loan updated", "success");
+    },
+    onError: (e) => toast.push(e instanceof ApiError ? e.message : "Failed", "error"),
+  });
+
+  const openEdit = (loan: Loan) => {
+    setLentDate(loan.lent_at ? loan.lent_at.slice(0, 10) : "");
+    setDueDate(loan.due_date ? loan.due_date.slice(0, 10) : "");
+    setReturnedDate(loan.returned_at ? loan.returned_at.slice(0, 10) : "");
+    setEditLoan(loan);
   };
 
   return (
@@ -128,6 +155,9 @@ export function LoansPage() {
                       <Undo2 className="h-3.5 w-3.5" /> Return
                     </Button>
                   )}
+                  <Button size="sm" variant="ghost" onClick={() => openEdit(loan)}>
+                    <Pencil className="h-3.5 w-3.5" /> Edit dates
+                  </Button>
                   <Button size="sm" variant="ghost" onClick={() => openFeedback(loan)}>
                     <MessageSquare className="h-3.5 w-3.5" />
                     {loan.feedback ? "Edit feedback" : "Add feedback"}
@@ -168,6 +198,47 @@ export function LoansPage() {
           <div>
             <Label>Comment</Label>
             <Textarea value={comment} onChange={(e) => setComment(e.target.value)} />
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        open={!!editLoan}
+        onClose={() => setEditLoan(null)}
+        title="Edit loan dates"
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setEditLoan(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => editLoan && editMut.mutate(editLoan.id)}
+              loading={editMut.isPending}
+            >
+              Save
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <div>
+            <Label>Lent</Label>
+            <Input type="date" value={lentDate} onChange={(e) => setLentDate(e.target.value)} />
+          </div>
+          <div>
+            <Label>Due (optional)</Label>
+            <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+          </div>
+          <div>
+            <Label>Returned</Label>
+            <Input
+              type="date"
+              value={returnedDate}
+              onChange={(e) => setReturnedDate(e.target.value)}
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Leave empty if the book is still out.
+            </p>
           </div>
         </div>
       </Modal>
