@@ -7,6 +7,7 @@ import { useAuth } from "@/auth/AuthContext";
 import { useToast } from "@/components/Toast";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
 import { Badge, Button, Card, Input, Label, Select, Spinner } from "@/components/ui";
+import { COPY_CONDITIONS } from "@/lib/utils";
 import type { BookDetail, CopyOut, LocationNode, LookupResult } from "@/lib/types";
 
 function flatten(nodes: LocationNode[]): { id: number; label: string }[] {
@@ -30,6 +31,7 @@ export function AddBookPage() {
   const [extraTags, setExtraTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [locationId, setLocationId] = useState("");
+  const [condition, setCondition] = useState("");
   const [saving, setSaving] = useState(false);
   const [notFound, setNotFound] = useState(false);
 
@@ -76,6 +78,7 @@ export function AddBookPage() {
       });
       await api.post<CopyOut>(`/api/households/${hid}/books/${book.id}/copies`, {
         location_id: locationId ? Number(locationId) : null,
+        condition: condition || null,
       });
       toast.push(`Added "${book.title}"`, "success");
       navigate(`/books/${book.id}`);
@@ -201,16 +204,29 @@ export function AddBookPage() {
             </div>
           )}
 
-          <div>
-            <Label>Location (optional)</Label>
-            <Select value={locationId} onChange={(e) => setLocationId(e.target.value)}>
-              <option value="">Unassigned</option>
-              {locationOptions.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.label}
-                </option>
-              ))}
-            </Select>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <Label>Location (optional)</Label>
+              <Select value={locationId} onChange={(e) => setLocationId(e.target.value)}>
+                <option value="">Unassigned</option>
+                {locationOptions.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div>
+              <Label>Condition (optional)</Label>
+              <Select value={condition} onChange={(e) => setCondition(e.target.value)}>
+                <option value="">Not set</option>
+                {COPY_CONDITIONS.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
           </div>
 
           <div>

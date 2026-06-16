@@ -30,7 +30,7 @@ import {
   StarRating,
   Textarea,
 } from "@/components/ui";
-import { formatDate } from "@/lib/utils";
+import { conditionLabel, COPY_CONDITIONS, formatDate } from "@/lib/utils";
 import type { BookDetail, CopyOut, Loan, LocationNode, Person, UserSelect } from "@/lib/types";
 
 function flatten(nodes: LocationNode[]): { id: number; label: string }[] {
@@ -118,6 +118,12 @@ export function BookDetailPage() {
   const moveCopy = useMutation({
     mutationFn: ({ copyId, locationId }: { copyId: number; locationId: number | null }) =>
       api.patch(`/api/households/${hid}/copies/${copyId}`, { location_id: locationId }),
+    onSuccess: refresh,
+    onError,
+  });
+  const setCondition = useMutation({
+    mutationFn: ({ copyId, condition }: { copyId: number; condition: string | null }) =>
+      api.patch(`/api/households/${hid}/copies/${copyId}`, { condition }),
     onSuccess: refresh,
     onError,
   });
@@ -269,7 +275,7 @@ export function BookDetailPage() {
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
         <ArrowLeft className="h-4 w-4" /> Back
       </Button>
@@ -427,8 +433,35 @@ export function BookDetailPage() {
                     ) : (
                       <span>{copy.location_path ?? "Unassigned"}</span>
                     )}
-                    {copy.condition && (
-                      <span className="text-xs text-muted-foreground">({copy.condition})</span>
+                    {canWrite ? (
+                      <Select
+                        value={copy.condition ?? ""}
+                        onChange={(e) =>
+                          setCondition.mutate({
+                            copyId: copy.id,
+                            condition: e.target.value || null,
+                          })
+                        }
+                        className="h-8 w-auto"
+                        aria-label="Condition"
+                      >
+                        <option value="">Condition…</option>
+                        {COPY_CONDITIONS.map((c) => (
+                          <option key={c.value} value={c.value}>
+                            {c.label}
+                          </option>
+                        ))}
+                        {copy.condition &&
+                          !COPY_CONDITIONS.some((c) => c.value === copy.condition) && (
+                            <option value={copy.condition}>{copy.condition}</option>
+                          )}
+                      </Select>
+                    ) : (
+                      copy.condition && (
+                        <span className="text-xs text-muted-foreground">
+                          ({conditionLabel(copy.condition)})
+                        </span>
+                      )
                     )}
                   </div>
                   <div className="flex items-center gap-2">
@@ -636,11 +669,17 @@ export function BookDetailPage() {
           </div>
           <div>
             <Label>Condition (optional)</Label>
-            <Input
+            <Select
               value={newCopyCondition}
               onChange={(e) => setNewCopyCondition(e.target.value)}
-              placeholder="e.g. good, signed, worn"
-            />
+            >
+              <option value="">Not set</option>
+              {COPY_CONDITIONS.map((c) => (
+                <option key={c.value} value={c.value}>
+                  {c.label}
+                </option>
+              ))}
+            </Select>
           </div>
         </div>
       </Modal>

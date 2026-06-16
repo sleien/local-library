@@ -87,7 +87,7 @@ export function PeoplePage() {
               );
             })
             .map((p) => (
-            <Link key={p.id} to={`/people/${p.id}`}>
+            <Link key={p.id} to={`/people/${p.id}`} className="block">
               <Card className="flex items-center justify-between p-3 transition-colors hover:bg-accent">
                 <div className="min-w-0">
                   <p className="font-medium">{p.name}</p>

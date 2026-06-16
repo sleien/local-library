@@ -68,8 +68,9 @@ class OpenLibraryProvider(MetadataProvider):
 
         covers: list[LookupCover] = []
         # A cover keyed by Open Library's internal id (from search) is a real
-        # image when present; the ISBN-keyed endpoint often returns a blank
-        # placeholder, so we no longer use it.
+        # image when present; the bare ISBN endpoint returns a blank placeholder
+        # for missing covers, so only fall back to it (with default=false, which
+        # 404s instead of serving the placeholder) when nothing else turned up.
         cover_i = (doc or {}).get("cover_i")
         if cover_i:
             covers.append(
@@ -79,6 +80,13 @@ class OpenLibraryProvider(MetadataProvider):
         for url_value in (cover_map.get("large"), cover_map.get("medium")):
             if url_value:
                 covers.append(LookupCover(source=self.name, url=url_value))
+        if not cover_i and not cover_map:
+            covers.append(
+                LookupCover(
+                    source=self.name,
+                    url=f"https://covers.openlibrary.org/b/isbn/{isbn}-L.jpg?default=false",
+                )
+            )
 
         identifiers = record.get("identifiers") or {}
         authors = [a.get("name") for a in record.get("authors", []) if a.get("name")]
@@ -187,7 +195,59 @@ class GoogleBooksProvider(MetadataProvider):
         )
 
 
-PROVIDERS: list[MetadataProvider] = [OpenLibraryProvider(), GoogleBooksProvider()]
+class AppleBooksProvider(MetadataProvider):
+    """Apple Books via the public iTunes lookup API (no key required).
+
+    Covers here are the store artwork, which is often the exact edition cover
+    that Open Library / Google Books miss for popular titles."""
+
+    name = "applebooks"
+
+    async def lookup(self, client: httpx.AsyncClient, isbn: str) -> LookupResult | None:
+        try:
+            resp = await client.get(
+                "https://itunes.apple.com/lookup",
+                params={"isbn": isbn, "entity": "ebook"},
+            )
+            resp.raise_for_status()
+            data = resp.json()
+        except (httpx.HTTPError, ValueError):
+            return None
+        results = data.get("results") or []
+        if not results:
+            return None
+        item = results[0]
+
+        covers: list[LookupCover] = []
+        art = item.get("artworkUrl100")
+        if art:
+            # Artwork URLs end in ".../100x100bb.jpg"; ask for a larger box.
+            covers.append(LookupCover(source=self.name, url=art.replace("100x100bb", "600x600bb")))
+
+        description = item.get("description")
+        if description:
+            # Apple returns HTML in the description; strip tags for a clean blurb.
+            description = re.sub(r"<[^>]+>", "", description).strip() or None
+
+        release = item.get("releaseDate")
+        # Leave ISBNs unset: the matched edition may differ from the scanned one,
+        # and lookup_isbn records/derives the scanned ISBN itself.
+        return LookupResult(
+            title=item.get("trackName") or "Unknown title",
+            authors=[item["artistName"]] if item.get("artistName") else [],
+            published_date=release[:10] if release else None,
+            description=description,
+            subjects=[item["primaryGenreName"]] if item.get("primaryGenreName") else [],
+            covers=covers,
+            sources=[self.name],
+        )
+
+
+PROVIDERS: list[MetadataProvider] = [
+    OpenLibraryProvider(),
+    GoogleBooksProvider(),
+    AppleBooksProvider(),
+]
 
 
 def _merge(base: LookupResult, other: LookupResult) -> LookupResult:

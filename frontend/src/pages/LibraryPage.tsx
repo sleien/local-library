@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Filter, History, PlusCircle, ScanSearch, Search, X } from "lucide-react";
@@ -25,12 +25,37 @@ export function LibraryPage() {
   const [locationId, setLocationId] = useState("");
   const [activeTags, setActiveTags] = useState<number[]>([]);
   const [showFilters, setShowFilters] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   // Run the onboarding tour once for new users.
   useEffect(() => {
     if (hasSeenTour()) return;
     const t = setTimeout(() => startTour(), 600);
     return () => clearTimeout(t);
+  }, []);
+
+  // Type-to-search: when the user starts typing anywhere on the page (and isn't
+  // already in a field), jump to the search box so the keystroke lands there.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const el = document.activeElement as HTMLElement | null;
+      if (
+        el &&
+        (el.tagName === "INPUT" ||
+          el.tagName === "TEXTAREA" ||
+          el.tagName === "SELECT" ||
+          el.isContentEditable)
+      ) {
+        return;
+      }
+      // A single printable character (but not space, which scrolls the page).
+      if (e.key.length === 1 && e.key !== " ") {
+        searchRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
   const { data: tags } = useQuery({
@@ -104,6 +129,7 @@ export function LibraryPage() {
         <div className="relative flex-1" data-tour="search">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
+            ref={searchRef}
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search title, author, ISBN..."

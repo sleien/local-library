@@ -396,6 +396,34 @@ async def test_refresh_covers(auth_client, monkeypatch):
     assert miss.status_code == 400
 
 
+async def test_copy_condition(auth_client):
+    hid = auth_client.household_id
+    book = (
+        await auth_client.post(f"/api/households/{hid}/books/manual", json={"title": "Cond"})
+    ).json()
+
+    # A copy can be created with a valid condition grade.
+    r = await auth_client.post(
+        f"/api/households/{hid}/books/{book['id']}/copies", json={"condition": "good"}
+    )
+    assert r.status_code == 201, r.text
+    copy = r.json()
+    assert copy["condition"] == "good"
+
+    # And updated to another valid grade.
+    upd = await auth_client.patch(
+        f"/api/households/{hid}/copies/{copy['id']}", json={"condition": "like_new"}
+    )
+    assert upd.status_code == 200
+    assert upd.json()["condition"] == "like_new"
+
+    # Unknown grades are rejected.
+    bad = await auth_client.post(
+        f"/api/households/{hid}/books/{book['id']}/copies", json={"condition": "mint"}
+    )
+    assert bad.status_code == 422
+
+
 async def test_reading_log(auth_client):
     hid = auth_client.household_id
     book = (

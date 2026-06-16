@@ -95,18 +95,23 @@ class CommentOut(BaseModel):
 
 # --- Copies -----------------------------------------------------------------
 
+# Physical condition grades a copy can have (stored as keys; the UI maps to
+# labels). Descriptive only — condition does not affect lending.
+COPY_CONDITIONS = ("new", "like_new", "good", "fair", "poor", "damaged")
+_CONDITION_PATTERN = "^(new|like_new|good|fair|poor|damaged)$"
+
 
 class CopyCreate(BaseModel):
     location_id: int | None = None
     acquired_date: date | None = None
-    condition: str | None = Field(default=None, max_length=50)
+    condition: str | None = Field(default=None, pattern=_CONDITION_PATTERN)
     notes: str | None = None
 
 
 class CopyUpdate(BaseModel):
     location_id: int | None = None
     acquired_date: date | None = None
-    condition: str | None = Field(default=None, max_length=50)
+    condition: str | None = Field(default=None, pattern=_CONDITION_PATTERN)
     notes: str | None = None
 
 

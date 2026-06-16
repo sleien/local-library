@@ -34,13 +34,15 @@ export function LibrariesPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
-      <div className="flex items-center gap-2">
-        <LibraryBig className="h-6 w-6" />
-        <h1 className="text-2xl font-semibold">Libraries</h1>
+      <div>
+        <div className="flex items-center gap-2">
+          <LibraryBig className="h-6 w-6" />
+          <h1 className="text-2xl font-semibold">Libraries</h1>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Every library you can access. Switch the active one, or create a new one.
+        </p>
       </div>
-      <p className="text-sm text-muted-foreground">
-        Every library you can access. Switch the active one, or create a new one.
-      </p>
 
       <div className="space-y-2">
         {households.map((h: HouseholdSummary) => {

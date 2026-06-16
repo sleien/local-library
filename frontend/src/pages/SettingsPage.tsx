@@ -209,7 +209,7 @@ export function SettingsPage() {
   };
 
   return (
-    <div className="mx-auto max-w-2xl space-y-5">
+    <div className="mx-auto max-w-2xl space-y-4">
       <h1 className="text-2xl font-semibold">Settings</h1>
 
       <Card className="p-4">
@@ -249,13 +249,20 @@ export function SettingsPage() {
             />
             <Button
               size="icon"
+              className="h-10 w-10"
               aria-label="Save name"
               onClick={() => nameDraft.trim() && renameHousehold.mutate()}
               loading={renameHousehold.isPending}
             >
               <Check className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="icon" aria-label="Cancel" onClick={() => setEditingName(false)}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-10 w-10"
+              aria-label="Cancel"
+              onClick={() => setEditingName(false)}
+            >
               <X className="h-4 w-4" />
             </Button>
           </div>
