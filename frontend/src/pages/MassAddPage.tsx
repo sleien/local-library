@@ -8,6 +8,7 @@ import {
   RotateCw,
   ScanLine,
   SearchX,
+  SlidersHorizontal,
   Trash2,
   XCircle,
 } from "lucide-react";
@@ -15,6 +16,7 @@ import { api, ApiError } from "@/lib/api";
 import { useAuth } from "@/auth/AuthContext";
 import { useToast } from "@/components/Toast";
 import { BarcodeScanner } from "@/components/BarcodeScanner";
+import { BulkReview, type ReviewItem } from "@/components/BulkReview";
 import { Button, Card, EmptyState, Input, Label, Select } from "@/components/ui";
 import { cn } from "@/lib/utils";
 import type { BulkAddItem, BulkAddResult, LocationNode } from "@/lib/types";
@@ -48,6 +50,8 @@ export function MassAddPage() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [filter, setFilter] = useState<StatusFilter>("all");
   const [busyIsbn, setBusyIsbn] = useState<string | null>(null);
+  const [reviewItems, setReviewItems] = useState<ReviewItem[]>([]);
+  const [reviewOpen, setReviewOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const historyKey = hid ? `bibliothek-bulk-history-${hid}` : "";
@@ -120,6 +124,14 @@ export function MassAddPage() {
       setCodes([]);
       qc.invalidateQueries({ queryKey: ["search"] });
       toast.push(`Added ${res.added}, ${res.failed} failed`, res.failed ? "info" : "success");
+      // Offer a quick pass to set each new copy's cover, condition, and location.
+      const added = res.items
+        .filter((i) => isSuccess(i.status) && i.book_id != null && i.copy_id != null)
+        .map((i) => ({ bookId: i.book_id!, copyId: i.copy_id!, title: i.title }));
+      if (added.length > 0) {
+        setReviewItems(added);
+        setReviewOpen(true);
+      }
       inputRef.current?.focus();
     } catch (err) {
       toast.push(err instanceof ApiError ? err.message : "Bulk add failed", "error");
@@ -243,6 +255,13 @@ export function MassAddPage() {
         {camera && <BarcodeScanner onDetected={addCode} continuous />}
       </Card>
 
+      {reviewItems.length > 0 && !reviewOpen && (
+        <Button variant="outline" className="w-full" onClick={() => setReviewOpen(true)}>
+          <SlidersHorizontal className="h-4 w-4" /> Set covers &amp; locations for the last{" "}
+          {reviewItems.length} added
+        </Button>
+      )}
+
       {codes.length > 0 && (
         <Card className="p-4">
           <div className="mb-2 flex items-center justify-between">
@@ -358,6 +377,16 @@ export function MassAddPage() {
 
       {codes.length === 0 && history.length === 0 && !camera && (
         <EmptyState title="Nothing scanned yet" hint="Scan a stack to add them all at once." />
+      )}
+
+      {hid && (
+        <BulkReview
+          householdId={hid}
+          items={reviewItems}
+          locationOptions={locationOptions}
+          open={reviewOpen}
+          onClose={() => setReviewOpen(false)}
+        />
       )}
     </div>
   );
